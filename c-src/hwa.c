@@ -57,13 +57,11 @@ static HWA_ParamConfig HwaParamConfig[1] =
         {
             .fftMode =
             {
-                .mode2X = HWA_FEATURE_BIT_DISABLE,
                 .fftEn = HWA_FEATURE_BIT_ENABLE,
                 .fftSize = 8,   // size is 2^fftSize
                 .butterflyScaling = 0,
                 .fftSize3xEn = HWA_FEATURE_BIT_DISABLE,
                 .windowEn = HWA_FEATURE_BIT_DISABLE,
-                .dcEstProfileSelect = HWA_DCEST_PROFILE_SELECT_PROFILE0,
                 .preProcCfg =
                 {
                     .dcEstResetMode = HWA_DCEST_INTERFSUM_RESET_MODE_NOUPDATE,
