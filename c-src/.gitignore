@@ -1,0 +1,11 @@
+*.o
+*Debug/*
+*.appimage
+*.bin
+*.out
+*.rprc
+.settings/
+.ccsproject
+.cproject
+.project
+.clangd
