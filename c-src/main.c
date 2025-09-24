@@ -242,8 +242,7 @@ static void init_task(void *args){
 
     Drivers_open();
     Board_driversOpen(); 
-    HWA_OpenConfig hwaopencfg = {.interruptPriority=0};
-    gHwaHandle[0] = HWA_open(0, &hwaopencfg, &err);
+    gHwaHandle[0] = HWA_open(0, NULL, &err);
     if(gHwaHandle[0] == NULL){
         DebugP_logError("Failed to open HWA\r\n");
         fail();
