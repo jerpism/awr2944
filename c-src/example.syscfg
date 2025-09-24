@@ -57,7 +57,6 @@ hwa1.$name = "CONFIG_HWA0";
 
 ipc.c66ss0   = "NONE";
 ipc.r5fss0_1 = "NONE";
-ipc.r5fss0_0 = "notify";
 
 qspi1.$name = "CONFIG_QSPI0";
 
@@ -119,6 +118,8 @@ enet_cpsw1.$name                  = "CONFIG_ENET_CPSW0";
 enet_cpsw1.PktInfoOnlyEnable      = true;
 enet_cpsw1.LargePoolPktCount      = 32;
 enet_cpsw1.cptsHostRxTsEn         = false;
+enet_cpsw1.AppLinkUpPortMask      = "ALL_PORTS";
+enet_cpsw1.PhyVariant             = "AutoPhy(DP83TC812R)";
 enet_cpsw1.txDmaChannel[0].$name  = "ENET_DMA_TX_CH0";
 enet_cpsw1.rxDmaChannel[0].$name  = "ENET_DMA_RX_CH0";
 enet_cpsw1.pinmux[0].$name        = "ENET_CPSW_PINMUX0";
