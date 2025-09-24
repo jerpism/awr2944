@@ -15,14 +15,18 @@
 
 #include <edma.h>
 #include <hwa.h>
+#include <cfg.h>
 
 
 static Edma_IntrObject gIntrObjAdcHwa;
 static Edma_IntrObject gIntrObjHwaL3;
+static Edma_IntrObject gIntrObjDfftRows;
+static Edma_IntrObject gIntrObjDfftCols;
 
 
-static uint8_t gTestBuff[2048] __attribute__((aligned(CacheP_CACHELINE_ALIGNMENT)));
-static uint8_t gTestDst[4096] __attribute__((section(".bss.dss_l3")));
+static uint32_t gbaseaddr;
+static uint32_t ghwal3param;
+static EDMACCPaRAMEntry edmaparam;
 
 
 void edma_write(){
@@ -30,6 +34,16 @@ void edma_write(){
     // TODO: probably replace this with the proper function?
     volatile uint32_t * const addr = (uint32_t*)(EDMA_getBaseAddr(gEdmaHandle[0])+0x1010);
     *addr = 0b1;
+}
+
+
+// This is terrible but for some reason the bcnt and dstbidx aren't being reloaded properly
+// which means after the first frame only one single chirp is written to the end of the sample buffer
+// simply self linking or linking to another set *should* work but both result in the same issue.
+// Forcefully reloading a param set seems to reset those internal counters as intended but
+// this is a slow, inelegant solution that will probably be the cause of some unforeseen consequences
+void edma_reset_hwal3_param(){
+    EDMA_setPaRAM(gbaseaddr, ghwal3param, &edmaparam);
 }
 
 
@@ -42,7 +56,7 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     int32_t ret = 0;
     uint8_t *srcp = (uint8_t*)src;
     uint8_t *dstp = (uint8_t*)dst;
-    EDMACCPaRAMEntry edmaparam;
+
 
     DebugP_log("EDMA: Configuring hwa to l3\r\n");
     /* This channel is used for HWAOUT->DSS_L3 transfering of data */
@@ -64,6 +78,12 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     param = EDMA_RESOURCE_ALLOC_ANY;
     ret = EDMA_allocParam(handle, &param);
 
+    // Terrible hack zone
+    gbaseaddr = base;
+    ghwal3param = param;
+    // you are safe now
+
+
     DebugP_log("EDMA: base: %#x, region: %u, ch: %u, tcc: %u, param: %u\r\n",base,region,ch,tcc,param);
 
     EDMA_configureChannelRegion(base, region, EDMA_CHANNEL_TYPE_DMA, ch, tcc , param, 1);
@@ -76,10 +96,10 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     edmaparam.bCntReload    = (uint16_t) bcnt;
     // Since we're always reading what's at the HWA output srcBIdx should be left as 0
     edmaparam.srcBIdx       = 0;
-    edmaparam.destBIdx      = (int16_t)  EDMA_PARAM_BIDX(acnt);
+    edmaparam.destBIdx      = (int16_t)EDMA_PARAM_BIDX(acnt);
     edmaparam.srcCIdx       = acnt;
     edmaparam.destCIdx      = acnt;
-    edmaparam.linkAddr      = EDMA_TPCC_OPT(param); 
+    edmaparam.linkAddr      = 0xFFFF; // don't link as we're resetting it in another place
     edmaparam.srcBIdxExt    = 0;
     edmaparam.destBIdxExt   = (int8_t) EDMA_PARAM_BIDX_EXT(acnt);
     // We only want to get an interrupt when a whole frame has been moved to L3
@@ -92,7 +112,6 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     EDMA_registerIntr(gEdmaHandle[0], &gIntrObjHwaL3);
     EDMA_enableEvtIntrRegion(base, region, ch);
     EDMA_enableTransferRegion(base, region, ch, EDMA_TRIG_MODE_EVENT);
-
 }
 
 
@@ -174,7 +193,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     DebugP_assert(ret == 0);
 
     HWA_SrcDMAConfig hwadma;
-    HWA_getDMAconfig(gHwaHandle[0], 0,  &hwadma);
+    HWA_getDMAconfig(handle, 0,  &hwadma);
     param1 = EDMA_RESOURCE_ALLOC_ANY;
     ret = EDMA_allocParam(handle, &param1);
     EDMA_configureChannelRegion(base, region, EDMA_CHANNEL_TYPE_DMA, ch1, tcc1, param1, 0);

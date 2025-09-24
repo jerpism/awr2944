@@ -7,6 +7,8 @@
 #include "ti_drivers_config.h"
 #include "ti_board_config.h"
 
+#include <stdio.h>
+
 /* Header file for configuration values */
 #include <cfg.h>
 
@@ -83,7 +85,7 @@ int32_t mmw_open(MMWave_Handle handle, int32_t *err){
     openCfg.laneEnCfg.laneEn = 0b1;
 
     openCfg.chCfg.rxChannelEn = CFG_OPEN_CHCONF_RXEN_BMASK;
-    openCfg.chCfg.txChannelEn = 0b1;
+    openCfg.chCfg.txChannelEn = 0b1111;
 
     openCfg.chCfg.cascading = 0;
     openCfg.chCfg.cascadingPinoutCfg = 0;
@@ -105,10 +107,10 @@ int32_t mmw_open(MMWave_Handle handle, int32_t *err){
 
 
 /* Pulls values from cfg.h */
-MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, int32_t *err){
+MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, rlUInt16_t id, int32_t *err){
     rlProfileCfg_t profileCfg;
     memset(&profileCfg, 0, sizeof(profileCfg));
-    profileCfg.profileId = CFG_PROFILE_PROFILEID;
+    profileCfg.profileId = id;
     profileCfg.pfCalLutUpdate |= 0b00;
     profileCfg.startFreqConst = CFG_PROFILE_STARTFREQCONST;
     profileCfg.idleTimeConst = CFG_PROFILE_IDLETIMECONST;         
@@ -119,6 +121,13 @@ MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, int32_t *err){
     profileCfg.digOutSampleRate = CFG_PROFILE_DIGOUTSAMPLERATE;
     profileCfg.rxGain = CFG_PROFILE_RXGAIN;
     profileCfg.freqSlopeConst = CFG_PROFILE_FREQSLOPECONST;
+
+
+    // TODO: remove this idiocy
+    if(id == 1){
+        // Set Tx1 phaseshifter to 180 deg for profile[1]
+        profileCfg.txPhaseShifter |= (32U << 10);
+    }
 
     return MMWave_addProfile(handle, &profileCfg, err);
 }
@@ -134,43 +143,61 @@ MMWave_ChirpHandle mmw_add_chirp(MMWave_ProfileHandle profile, int32_t *err){
     chirpCfg.freqSlopeVar = 0;
     chirpCfg.idleTimeVar = 0;
     chirpCfg.adcStartTimeVar = 0;
-    chirpCfg.txEnable |= 0b0001;
+    chirpCfg.txEnable |= 0b0011;
 
     return MMWave_addChirp(profile, &chirpCfg, err);
 }
 
-int32_t mmw_add_chirps(MMWave_ProfileHandle profile, int32_t *err){
+
+int32_t mmw_add_chirps(MMWave_ProfileHandle profile, rlUInt16_t profileid, int32_t *err){
     rlChirpCfg_t chirpCfg;
     memset(&chirpCfg, 0, sizeof(chirpCfg));
 
-    chirpCfg.profileId = 0;
+
+    chirpCfg.profileId = profileid;
     chirpCfg.startFreqVar = 0;
     chirpCfg.freqSlopeVar = 0;
     chirpCfg.idleTimeVar = 0;
     chirpCfg.adcStartTimeVar = 0;
-    uint8_t txmask = 0b0001;
+
     for(int i = 0; i < 4; ++i){
         chirpCfg.chirpEndIdx = i;
         chirpCfg.chirpStartIdx = i;
-        chirpCfg.txEnable = 0b0001;
+        chirpCfg.txEnable = (0b0001 << i);
         MMWave_ChirpHandle chirp = MMWave_addChirp(profile, &chirpCfg,err);
         if(chirp == NULL){
             return -1;
         }
-        txmask = (txmask << 1U);
+
     }
+
+/*
+    chirpCfg.chirpEndIdx = 1;
+    chirpCfg.chirpStartIdx = 1;
+    chirpCfg.txEnable = 0b0010;
+    chirp = MMWave_addChirp(profile, &chirpCfg,err);
+    if(chirp == NULL){
+        return -1;
+    }
+
+
+   */
+
     return 0;
 }
 
-/* For now only supports configuring the first profile */
+
 int32_t mmw_config(MMWave_Handle handle, MMWave_ProfileHandle profiles[static MMWAVE_MAX_PROFILE], int32_t *err){
     int32_t ret = 0;
     MMWave_CtrlCfg ctrlCfg;
-
+    rlBpmChirpCfg_t bpmCfg;
+    memset(&bpmCfg, 0, sizeof(bpmCfg));
     memset(&ctrlCfg, 0, sizeof(ctrlCfg));
+
     ctrlCfg.dfeDataOutputMode = MMWave_DFEDataOutputMode_FRAME;
     ctrlCfg.numOfPhaseShiftChirps[0] = 0;
     ctrlCfg.u.frameCfg[0].profileHandle[0] = profiles[0];
+    ctrlCfg.u.frameCfg[0].profileHandle[1] = profiles[1];
 
     for(int i = 1; i < MMWAVE_MAX_PROFILE; ++i){
         ctrlCfg.u.frameCfg[0].profileHandle[i] = NULL;
@@ -181,7 +208,26 @@ int32_t mmw_config(MMWave_Handle handle, MMWave_ProfileHandle profiles[static MM
     ctrlCfg.u.frameCfg[0].frameCfg.framePeriodicity = 2000000;
     ctrlCfg.u.frameCfg[0].frameCfg.numFrames = 1;
     ctrlCfg.u.frameCfg[0].frameCfg.triggerSelect = 1;
-    ctrlCfg.u.frameCfg[0].frameCfg.numLoops = 128 / 4;
+    ctrlCfg.u.frameCfg[0].frameCfg.numLoops = CHIRPS_PER_FRAME / 4; //TODO: get this in some clever way
+
+    //TODO: make this handle more than 2 tx
+ /*   bpmCfg.chirpEndIdx = 0;
+    bpmCfg.chirpStartIdx = 0;
+    bpmCfg.constBpmVal = 0; // Keep chirp 0 as +1/+1
+    MMWave_BpmChirpHandle bpm = MMWave_addBpmChirp(handle, &bpmCfg, err);
+
+    if(bpm == NULL){
+        return -1;
+    }
+
+    bpmCfg.chirpEndIdx = 1;
+    bpmCfg.chirpStartIdx = 1;
+    bpmCfg.constBpmVal |= (1U << 3); // And set chirp 1 as +1/-1
+    bpm = MMWave_addBpmChirp(handle, &bpmCfg, err);
+
+    if(bpm == NULL){
+        return -1;
+    }*/
 
     ret = MMWave_config(handle, &ctrlCfg, err);
 
@@ -194,10 +240,10 @@ int32_t mmw_start(MMWave_Handle handle, int32_t *err){
     MMWave_CalibrationCfg calibCfg;
     memset(&calibCfg, 0, sizeof(calibCfg));
     calibCfg.dfeDataOutputMode = MMWave_DFEDataOutputMode_FRAME;
-    calibCfg.u.chirpCalibrationCfg.enableCalibration = 0;
-    calibCfg.u.chirpCalibrationCfg.enablePeriodicity = 0;
-    calibCfg.u.chirpCalibrationCfg.periodicTimeInFrames = 0;
-    calibCfg.u.chirpCalibrationCfg.reportEn = 1;
+    calibCfg.u.chirpCalibrationCfg.enableCalibration = 1;
+    calibCfg.u.chirpCalibrationCfg.enablePeriodicity = 1;
+    calibCfg.u.chirpCalibrationCfg.periodicTimeInFrames = 1;
+    calibCfg.u.chirpCalibrationCfg.reportEn = 0;
 
     ret = MMWave_start(handle, &calibCfg, err);
 

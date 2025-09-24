@@ -29,10 +29,11 @@ int32_t mmw_start(MMWave_Handle handle, int32_t *err);
 MMWave_Handle mmw_init(int32_t *err);
 
 /* Creates a profile for a given handle 
+ * TODO: update this later to reflect reality
  * NOTE: the profile is configured according to a hardcoded configuration
  * returns a profile handle on success, NULL otherwise
- * err contains the specific error code */
-MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, int32_t *err);
+ * err contains the specific error code  */
+MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, rlUInt16_t id, int32_t *err);
 
 /* Adds a chirp to a given profile 
  * NOTE: chirp configuration is also hardcoded 
@@ -40,7 +41,7 @@ MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, int32_t *err);
  * err contains the specific error code */
 MMWave_ChirpHandle mmw_add_chirp(MMWave_ProfileHandle profile, int32_t *err);
 
-int32_t mmw_add_chirps(MMWave_ProfileHandle profile, int32_t *err);
+int32_t mmw_add_chirps(MMWave_ProfileHandle profile, rlUInt16_t profileid, int32_t *err);
 
 
 #endif /* MMW_H */

@@ -17,4 +17,15 @@
 #define NUM_RX_ANTENNAS ( ((CFG_OPEN_CHCONF_RXEN_BMASK & 0b0001) > 0 ? 1 : 0) + ((CFG_OPEN_CHCONF_RXEN_BMASK & 0b0010) > 0 ? 1 : 0) + \
                         ((CFG_OPEN_CHCONF_RXEN_BMASK & 0b0100) > 0 ? 1 : 0) + ((CFG_OPEN_CHCONF_RXEN_BMASK & 0b1000) > 0 ? 1 : 0) )
 
+#define SAMPLE_SIZE         (sizeof(uint16_t))
+#define CHIRP_DATASIZE      (NUM_RX_ANTENNAS * CFG_PROFILE_NUMADCSAMPLES * SAMPLE_SIZE)
+#define CHIRPS_PER_FRAME    128
+#define FRAME_DATASIZE      (CHIRP_DATASIZE * CHIRPS_PER_FRAME)
+#define UDP_BYTES_PER_PKT   1024
+#define UDP_PKT_CNT         (FRAME_DATASIZE / UDP_BYTES_PER_PKT)
+
+#define CPLX_SAMPLE_SIZE (sizeof(int16_t) * 2)
+
+
+
 #endif
