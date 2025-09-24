@@ -174,7 +174,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     DebugP_assert(ret == 0);
 
     HWA_SrcDMAConfig hwadma;
-    HWA_getDMAconfig(handle, 0,  &hwadma);
+    HWA_getDMAconfig(gHwaHandle[0], 0,  &hwadma);
     param1 = EDMA_RESOURCE_ALLOC_ANY;
     ret = EDMA_allocParam(handle, &param1);
     EDMA_configureChannelRegion(base, region, EDMA_CHANNEL_TYPE_DMA, ch1, tcc1, param1, 0);

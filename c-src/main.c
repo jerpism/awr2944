@@ -32,7 +32,7 @@
 
 /* TI Header files */
 #include <stdlib.h>
-#include <stdbool.h>
+
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -99,9 +99,6 @@ TaskHandle_t gInitTask;
 TaskHandle_t gMainTask;
 TaskHandle_t gExecTask;
 TaskHandle_t gDpcTask;
-
-//FIXME: hack to make old stuff work, doesn't need to be an array
-HWA_Handle gHwaHandle[1];
 
 
 /* == Function Declarations == */
@@ -224,8 +221,6 @@ static void init_task(void *args){
 
     Drivers_open();
     Board_driversOpen(); 
-    HWA_OpenConfig hwaopenCfg = {.interruptPriority = 0};
-    gHwaHandle[0] = HWA_open(0, &hwaopenCfg,  &err);
 
     DebugP_log("Init task launched\r\n");
 
