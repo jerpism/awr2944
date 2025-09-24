@@ -141,7 +141,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     region = EDMA_getRegionId(handle);
     DebugP_assert(region < SOC_EDMA_NUM_REGIONS);
 
-    ch = EDMA_RESOURCE_ALLOC_ANY;
+    ch = 1;
     ret = EDMA_allocDmaChannel(handle, &ch);
     DebugP_assert(ret == 0);
 
@@ -184,7 +184,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
      * This is achieved by transferring a value to DMA2HWA_TRIGGER from a read-only register
      * that contains a bit corresponding to the DMA channel we are using as a trigger source 
      * which in this case is likely always going to be the 0th channel. */
-    ch1 = EDMA_RESOURCE_ALLOC_ANY;
+    ch1 = 2;
     ret = EDMA_allocDmaChannel(handle, &ch1);
     DebugP_assert(ret == 0);
 
