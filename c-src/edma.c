@@ -219,8 +219,8 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
    // EDMA_linkChannel(base, param1, param1);
 
     // TODO: figure out these too but having TCCHEN and ITCCHEN seems to work
-    uint32_t chainoptions = (EDMA_OPT_TCCHEN_MASK | EDMA_OPT_ITCCHEN_MASK);
-    EDMA_chainChannel(base, param, ch1, chainoptions);
+    uint32_t chainoptions = (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK | EDMA_OPT_TCCHEN_MASK | EDMA_OPT_ITCCHEN_MASK);
+   // EDMA_chainChannel(base, param, ch1, chainoptions);
 
 
     gIntrObjAdcHwa.tccNum = tcc;
@@ -228,7 +228,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     gIntrObjAdcHwa.appData = (void*)0;
     ret = EDMA_registerIntr(handle, &gIntrObjAdcHwa);
     DebugP_assert(ret == 0);
-  //  EDMA_enableEvtIntrRegion(base, region, ch);
+    EDMA_enableEvtIntrRegion(base, region, ch);
     EDMA_enableTransferRegion(base, region, ch, EDMA_TRIG_MODE_EVENT);
     DebugP_log("Edma initialized\r\n");
 }
