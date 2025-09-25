@@ -114,40 +114,44 @@ mpu_armv76.allowExecute = false;
 mpu_armv76.baseAddr     = 0x88000000;
 mpu_armv76.size         = 20;
 
-enet_cpsw1.$name                  = "CONFIG_ENET_CPSW0";
-enet_cpsw1.PktInfoOnlyEnable      = true;
-enet_cpsw1.LargePoolPktCount      = 32;
-enet_cpsw1.cptsHostRxTsEn         = false;
-enet_cpsw1.AppLinkUpPortMask      = "ALL_PORTS";
-enet_cpsw1.PhyVariant             = "AutoPhy(DP83TC812R)";
-enet_cpsw1.txDmaChannel[0].$name  = "ENET_DMA_TX_CH0";
-enet_cpsw1.rxDmaChannel[0].$name  = "ENET_DMA_RX_CH0";
-enet_cpsw1.pinmux[0].$name        = "ENET_CPSW_PINMUX0";
+enet_cpsw1.$name                           = "CONFIG_ENET_CPSW0";
+enet_cpsw1.PktInfoOnlyEnable               = true;
+enet_cpsw1.LargePoolPktCount               = 32;
+enet_cpsw1.cptsHostRxTsEn                  = false;
+enet_cpsw1.AppLinkUpPortMask               = "ALL_PORTS";
+enet_cpsw1.txDmaChannel[0].$name           = "ENET_DMA_TX_CH0";
+enet_cpsw1.rxDmaChannel[0].$name           = "ENET_DMA_RX_CH0";
+enet_cpsw1.pinmux[0].$name                 = "ENET_CPSW_PINMUX0";
+enet_cpsw1.pinmux[0].phyToMacInterfaceMode = "RGMII";
 enet_cpsw1.netifInstance.create(1);
-enet_cpsw1.netifInstance[0].$name = "NETIF_INST_ID0";
+enet_cpsw1.netifInstance[0].$name          = "NETIF_INST_ID0";
 
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
  * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
  * re-solve from scratch.
  */
-qspi1.QSPI["0"].$suggestSolution                  = "PAD_AL";
-qspi1.QSPI["1"].$suggestSolution                  = "PAD_AM";
-qspi1.QSPI["2"].$suggestSolution                  = "PAD_AN";
-qspi1.QSPI["3"].$suggestSolution                  = "PAD_AO";
-qspi1.QSPI.$suggestSolution                       = "QSPI0";
-qspi1.QSPI.CLK.$suggestSolution                   = "PAD_AP";
-qspi1.QSPI.CS.$suggestSolution                    = "PAD_AQ";
-enet_cpsw1.pinmux[0].CPTS.$suggestSolution        = "CPTS0";
-enet_cpsw1.pinmux[0].MDIO.$suggestSolution        = "MDIO0";
-enet_cpsw1.pinmux[0].MDIO.DATA.$suggestSolution   = "PAD_CM";
-enet_cpsw1.pinmux[0].MDIO.CLK.$suggestSolution    = "PAD_CN";
-enet_cpsw1.pinmux[0].RMII.$suggestSolution        = "RMII0";
-enet_cpsw1.pinmux[0].RMII.RXD0.$suggestSolution   = "PAD_CL";
-enet_cpsw1.pinmux[0].RMII.RXD1.$suggestSolution   = "PAD_CK";
-enet_cpsw1.pinmux[0].RMII.RXER.$suggestSolution   = "PAD_BZ";
-enet_cpsw1.pinmux[0].RMII.TXD0.$suggestSolution   = "PAD_CF";
-enet_cpsw1.pinmux[0].RMII.TXD1.$suggestSolution   = "PAD_CE";
-enet_cpsw1.pinmux[0].RMII.DV.$suggestSolution     = "PAD_BY";
-enet_cpsw1.pinmux[0].RMII.REFCLK.$suggestSolution = "PAD_BX";
-enet_cpsw1.pinmux[0].RMII.TXEN.$suggestSolution   = "PAD_CA";
+qspi1.QSPI["0"].$suggestSolution                 = "PAD_AL";
+qspi1.QSPI["1"].$suggestSolution                 = "PAD_AM";
+qspi1.QSPI["2"].$suggestSolution                 = "PAD_AN";
+qspi1.QSPI["3"].$suggestSolution                 = "PAD_AO";
+qspi1.QSPI.$suggestSolution                      = "QSPI0";
+qspi1.QSPI.CLK.$suggestSolution                  = "PAD_AP";
+qspi1.QSPI.CS.$suggestSolution                   = "PAD_AQ";
+enet_cpsw1.pinmux[0].CPTS.$suggestSolution       = "CPTS0";
+enet_cpsw1.pinmux[0].MDIO.$suggestSolution       = "MDIO0";
+enet_cpsw1.pinmux[0].MDIO.DATA.$suggestSolution  = "PAD_CM";
+enet_cpsw1.pinmux[0].MDIO.CLK.$suggestSolution   = "PAD_CN";
+enet_cpsw1.pinmux[0].RGMII.$suggestSolution      = "RGMII0";
+enet_cpsw1.pinmux[0].RGMII.RD0.$suggestSolution  = "PAD_CL";
+enet_cpsw1.pinmux[0].RGMII.RD1.$suggestSolution  = "PAD_CK";
+enet_cpsw1.pinmux[0].RGMII.RD2.$suggestSolution  = "PAD_CJ";
+enet_cpsw1.pinmux[0].RGMII.RD3.$suggestSolution  = "PAD_CI";
+enet_cpsw1.pinmux[0].RGMII.RCTL.$suggestSolution = "PAD_CB";
+enet_cpsw1.pinmux[0].RGMII.RCLK.$suggestSolution = "PAD_CH";
+enet_cpsw1.pinmux[0].RGMII.TD0.$suggestSolution  = "PAD_CF";
+enet_cpsw1.pinmux[0].RGMII.TD1.$suggestSolution  = "PAD_CE";
+enet_cpsw1.pinmux[0].RGMII.TD2.$suggestSolution  = "PAD_CD";
+enet_cpsw1.pinmux[0].RGMII.TD3.$suggestSolution  = "PAD_CC";
+enet_cpsw1.pinmux[0].RGMII.TCTL.$suggestSolution = "PAD_CA";
+enet_cpsw1.pinmux[0].RGMII.TCLK.$suggestSolution = "PAD_CG";
