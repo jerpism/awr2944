@@ -142,7 +142,9 @@ static inline void fail(void){
 
 
 void edma_callback(Edma_IntrHandle handle, void *args){
-
+   // printf("Edma cb\r\n");
+    hwa_run(gHwaHandle[0]);
+   // HWA_setDMA2ACCManualTrig(gHwaHandle[0], 0);
 }
 
 
@@ -150,7 +152,7 @@ void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
     HWA_reset(gHwaHandle[0]);
 
     // TODO: don't blindly guess channel number here but that's an issue for future me
-    // and it should always be 3 anyways
+    // and it should always be 2 anyways
     EDMA_setEvtRegion(EDMA_getBaseAddr(gEdmaHandle[0]), 0, 3);
 
 }
@@ -208,7 +210,7 @@ while(1){
         MMWave_stop(gMmwHandle, &err);
 
 //        process_data(&gSampleBuff, 4, CHIRPS_PER_FRAME, CFG_PROFILE_NUMADCSAMPLES / 2);
-
+     //   printf("Ran a frame\r\n");
      
         udp_send_data((void*)&header, 4);
         for(size_t i = 0; i < UDP_PKT_CNT; ++i){
@@ -410,8 +412,7 @@ void btn_isr(void *arg){
 
 
 void chirp_isr(void *arg){
-    int32_t err;
-    edma_write();
+   EDMA_setEvtRegion(EDMA_getBaseAddr(gEdmaHandle[0]), 0, 1);
 }
 #endif
 
