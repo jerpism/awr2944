@@ -19,7 +19,7 @@ static HWA_CommonConfig HwaCommonConfig[1] =
 static HWA_ParamConfig HwaParamConfig[] =
 {
     {
-		.triggerMode = HWA_TRIG_MODE_DMA,
+		.triggerMode = HWA_TRIG_MODE_SOFTWARE,
         .triggerSrc = 0,
 		.accelMode = HWA_ACCELMODE_FFT,
 		.source =
