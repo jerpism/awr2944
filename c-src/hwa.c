@@ -5,6 +5,36 @@
 #include "ti_drivers_config.h"
 #include <cfg.h>
 
+// TODO: these are here just temporarily to easily tune CFAR and they should be moved to cfg.h or something
+// How many cells to use for noise averaging for CUT
+// actual value used is val * 2
+#define CFAR_NUM_NOISE_LEFT     5
+#define CFAR_NUM_NOISE_RIGHT    5
+// Guard cells (pretty self-explanatory)
+#define CFAR_NUM_GUARD_CELLS    0
+
+// Div factor is 2^CFAR_AVG_DIV_FACTOR
+#define CFAR_AVG_DIV_FACTOR     0
+
+#define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
+
+// For OS mode so these won't be used with CA
+#define CFAR_OS_KVALUE          0
+#define CFAR_OS_EDGE_KSCALE_EN  0
+
+// We're inputting complex samples so have the HWA perform a magnitude operation for us
+#define CFAR_OPER_MODE      (HWA_CFAR_OPER_MODE_MAG_INPUT_REAL)
+
+// Documentation is a bit confusing on this but this should output noise avg values on I channel (same for all?) and a binary detection flag on Q
+#define CFAR_OUTPUT_MODE    (HWA_CFAR_OUTPUT_MODE_I_nAVG_ALL_Q_DET_FLAG)
+
+// No idea what these really do as of now
+#define CFAR_ADV_OUT_MODE   (HWA_FEATURE_BIT_DISABLE)
+#define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
+#define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_DISABLE)
+
+
+
 static HWA_CommonConfig HwaCommonConfig[1] =
 {
     {
@@ -143,6 +173,63 @@ static HWA_ParamConfig HwaParamConfig[] =
         },
     },
 };
+
+static HWA_ParamConfig cfarCfg = {
+    .triggerMode = HWA_TRIG_MODE_SOFTWARE,
+    .triggerSrc = 0,
+    .accelMode = HWA_ACCELMODE_CFAR,
+    .accelModeArgs = {
+        .cfarMode = {
+            .numNoiseSamplesLeft = CFAR_NUM_NOISE_LEFT,
+            .numNoiseSamplesRight = CFAR_NUM_NOISE_RIGHT,
+            .numGuardCells = CFAR_NUM_GUARD_CELLS,
+            .nAvgDivFactor = CFAR_AVG_DIV_FACTOR,
+            .nAvgMode = CFAR_AVG_MODE,
+            .cfarOsKvalue = CFAR_OS_KVALUE,
+            .cfarOsEdgeKScaleEn = CFAR_OS_EDGE_KSCALE_EN,
+            .operMode = CFAR_OPER_MODE,
+            .outputMode = CFAR_OUTPUT_MODE,
+            .cfarAdvOutMode = CFAR_ADV_OUT_MODE,
+            .peakGroupEn = CFAR_PEAK_GROUP_EN,
+            .cyclicModeEn = CFAR_CYCLIC_MODE_EN,
+
+        },
+    },
+    .source = {
+        .srcAddr = 0,
+        .srcAcnt = 127,
+        .srcAIdx = CPLX_SAMPLE_SIZE,
+        .srcBcnt = 1,
+        .srcBIdx = 128 * CPLX_SAMPLE_SIZE,
+        // These probably don't get applied
+        .srcCcnt = 1,
+        .srcCIdx = 0,
+        .srcAcircShift = 0,
+        .srcAcircShiftWrap = 0,
+        .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
+        .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
+        .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
+        .srcSign = HWA_SAMPLES_SIGNED,
+        .srcConjugate = HWA_FEATURE_BIT_DISABLE,
+        .srcScale = 8,
+        .srcIQSwap = HWA_FEATURE_BIT_DISABLE,
+    },
+    .dest = {
+        .dstAddr = 0x4000,
+        .dstAcnt = 127,
+        .dstAIdx = CPLX_SAMPLE_SIZE,
+        .dstBIdx = 128 * CPLX_SAMPLE_SIZE,
+        // Does this even get applied with cfar? maybe required since the output is in I/Q form?
+        .dstRealComplex = HWA_SAMPLES_FORMAT_COMPLEX, 
+        .dstWidth = HWA_SAMPLES_WIDTH_16BIT,
+        .dstSign = HWA_SAMPLES_SIGNED,
+        .dstConjugate = HWA_FEATURE_BIT_DISABLE,
+        .dstScale = 8,
+        .dstSkipInit = 0,
+        .dstIQswap = HWA_FEATURE_BIT_DISABLE,
+    },
+
+};
 /* HWA RAM atrributes */
 HWA_RAMAttrs HwaRamCfg[HWA_NUM_RAMS] =
 {
@@ -158,15 +245,6 @@ uint32_t hwa_getaddr(HWA_Handle handle){
 }
 
 
-void hwa_process_dfft(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb, uint8_t bcnt){
-    HWA_configCommon(handle, &HwaCommonConfig[0]);
-    HwaParamConfig[1].source.srcBcnt = bcnt;
-    HWA_configParamSet(handle, 0, &HwaParamConfig[1], NULL);
-    HWA_enable(handle, 1U);
-    HWA_reset(handle);
-    HWA_setSoftwareTrigger(handle, HWA_TRIG_MODE_SOFTWARE);
-}
-
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCPARAMRegs *pparam = (DSSHWACCPARAMRegs*)gHwaObjectPtr[0]->hwAttrs->paramBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
@@ -179,6 +257,14 @@ void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
     HWA_enable(handle, 1U);
     HWA_reset(handle);
+}
+
+
+void hwa_cfar(HWA_Handle handle){
+    HWA_configParamSet(handle, 0, &cfarCfg, NULL);
+    HWA_enable(handle, 1);
+    HWA_reset(handle);
+    HWA_setSoftwareTrigger(handle, HWA_TRIG_MODE_SOFTWARE);
 }
 
 
