@@ -98,7 +98,7 @@ TaskHandle_t gDpcTask;
 
 HWA_Handle gHwaHandle[1];
 
-#define GET_SAMPLE_OFFSET(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
+#define GET_SAMPLE_IDX(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
 
 /* == Function Declarations == */
 /* ISRs */
