@@ -4,14 +4,15 @@
 #include <drivers/hwa.h>
 #include "ti_drivers_config.h"
 #include <cfg.h>
+#include <types.h>
 
 // TODO: these are here just temporarily to easily tune CFAR and they should be moved to cfg.h or something
 // How many cells to use for noise averaging for CUT
 // actual value used is val * 2
-#define CFAR_NUM_NOISE_LEFT     5
-#define CFAR_NUM_NOISE_RIGHT    5
+#define CFAR_NUM_NOISE_LEFT     3
+#define CFAR_NUM_NOISE_RIGHT    3
 // Guard cells (pretty self-explanatory)
-#define CFAR_NUM_GUARD_CELLS    0
+#define CFAR_NUM_GUARD_CELLS    3
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
 #define CFAR_AVG_DIV_FACTOR     0
@@ -25,8 +26,8 @@
 // We're inputting complex samples so have the HWA perform a magnitude operation for us
 #define CFAR_OPER_MODE      (HWA_CFAR_OPER_MODE_MAG_INPUT_REAL)
 
-// Documentation is a bit confusing on this but this should output noise avg values on I channel (same for all?) and a binary detection flag on Q
-#define CFAR_OUTPUT_MODE    (HWA_CFAR_OUTPUT_MODE_I_nAVG_ALL_Q_DET_FLAG)
+// Documentation is a bit confusing on this but this should output noise avg values on I channel (same for all?) and CUT on Q
+#define CFAR_OUTPUT_MODE    (HWA_CFAR_OUTPUT_MODE_I_PEAK_IDX_Q_CUT)
 
 // No idea what these really do as of now
 #define CFAR_ADV_OUT_MODE   (HWA_FEATURE_BIT_DISABLE)
@@ -198,15 +199,16 @@ static HWA_ParamConfig cfarCfg = {
     .source = {
         .srcAddr = 0,
         .srcAcnt = 127,
-        .srcAIdx = CPLX_SAMPLE_SIZE,
+        .srcAIdx = sizeof(int16reim_t),
         .srcBcnt = 1,
-        .srcBIdx = 128 * CPLX_SAMPLE_SIZE,
+        .srcBIdx = 128 * sizeof(int16reim_t),
         // These probably don't get applied
         .srcCcnt = 1,
         .srcCIdx = 0,
         .srcAcircShift = 0,
         .srcAcircShiftWrap = 0,
         .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
+        // Do these apply before or after preprocessing?
         .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
         .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
         .srcSign = HWA_SAMPLES_SIGNED,
@@ -217,12 +219,12 @@ static HWA_ParamConfig cfarCfg = {
     .dest = {
         .dstAddr = 0x4000,
         .dstAcnt = 127,
-        .dstAIdx = CPLX_SAMPLE_SIZE,
-        .dstBIdx = 128 * CPLX_SAMPLE_SIZE,
+        .dstAIdx = 4,
+        .dstBIdx = 128 * 4, // ignored in detected peaks mode
         // Does this even get applied with cfar? maybe required since the output is in I/Q form?
         .dstRealComplex = HWA_SAMPLES_FORMAT_COMPLEX, 
-        .dstWidth = HWA_SAMPLES_WIDTH_16BIT,
-        .dstSign = HWA_SAMPLES_SIGNED,
+        .dstWidth = HWA_SAMPLES_WIDTH_32BIT, // output is 24 bit so need to make this larger
+        .dstSign = HWA_SAMPLES_UNSIGNED,
         .dstConjugate = HWA_FEATURE_BIT_DISABLE,
         .dstScale = 8,
         .dstSkipInit = 0,
