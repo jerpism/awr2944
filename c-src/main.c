@@ -131,7 +131,9 @@ SemaphoreP_Object gFrameDoneSem;
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
 static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
-static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
+#include "BIG.h"
+//static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
+static int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
 
 
 static inline void fail(void){
@@ -183,7 +185,6 @@ static void main_task(void *args){
 
     // TODO: grab this from sysconfig somehow but for now assume bank 2 will be output
     void *hwaout = (void*)(hwa_getaddr(gHwaHandle[0])+0x4000);
-    void *hwain = (void*)(hwa_getaddr(gHwaHandle[0]));
 
     HwiP_enable();
 while(1){
@@ -209,16 +210,23 @@ while(1){
 
         MMWave_stop(gMmwHandle, &err);
 
-//        process_data(&gSampleBuff, 4, CHIRPS_PER_FRAME, CFG_PROFILE_NUMADCSAMPLES / 2);
-     //   printf("Ran a frame\r\n");
+        int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
+        for(size_t i = 0; i < NUM_RANGEBINS; ++i){
+            hwain[i] = gFrameTest[i];
+        }
+        hwa_cfar(gHwaHandle[0]);
+
+        while(1)__asm__("wfi");
+
+
      
-        udp_send_data((void*)&header, 4);
+/*        udp_send_data((void*)&header, 4);
         for(size_t i = 0; i < UDP_PKT_CNT; ++i){
             udp_send_data((void*)(gSampleBuff + (i * UDP_BYTES_PER_PKT)), UDP_BYTES_PER_PKT);
         }
-        udp_send_data((void*)&footer, 4);
+        udp_send_data((void*)&footer, 4);*/
     }
-    }
+}
     while(1)__asm__("wfi");
 
 }
@@ -261,7 +269,7 @@ static void init_task(void *args){
 
 
     DebugP_log("Init network...\r\n");
-    network_init(NULL);
+//    network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
