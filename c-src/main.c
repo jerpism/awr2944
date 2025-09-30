@@ -190,7 +190,7 @@ static void main_task(void *args){
     HwiP_enable();
 while(1){
     ClockP_usleep(5000);
-    while(gState){
+   // while(gState){
         // This might be unnecessary but we have encountered situations
         // in which the system ends up locked with interrupts seemingly disabled
         // so make sure they are re-enabled at the start of each frame 
@@ -200,22 +200,33 @@ while(1){
         HWA_enable(gHwaHandle[0], 1U);
 
 
-        mmw_start(gMmwHandle, &err);
+       // mmw_start(gMmwHandle, &err);
 
         // Make sure wait ticks is not set to SystemP_WAIT_FOREVER
         // At times the device seems to end up in a deadlock forever looping in the idle task
         // and having a timeout here makes sure that the system never ends up stuck here 
         // this does mean that in some cases a duplicate frame may be sent but operation 
         // seems to resume normally afterwards
-        SemaphoreP_pend(&gFrameDoneSem, 500);
+       // SemaphoreP_pend(&gFrameDoneSem, 500);
 
-        MMWave_stop(gMmwHandle, &err);
+       // MMWave_stop(gMmwHandle, &err);
 
         int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
         for(size_t i = 0; i < NUM_RANGEBINS; ++i){
             hwain[i] = gFrameTest[i];
         }
         hwa_cfar(gHwaHandle[0]);
+
+     //   ClockP_usleep(1000*50);
+    //    hwa_cfar(gHwaHandle[0]);
+
+        ClockP_usleep(1000*50);
+
+        DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+        uint16_t peakcnt = pregs->CFAR_PEAKCNT & 0x00000fff;
+        printf("%hu\r\n",peakcnt);
+
+
 
         while(1)__asm__("wfi");
 
@@ -226,7 +237,7 @@ while(1){
             udp_send_data((void*)(gSampleBuff + (i * UDP_BYTES_PER_PKT)), UDP_BYTES_PER_PKT);
         }
         udp_send_data((void*)&footer, 4);*/
-    }
+   // }
 }
     while(1)__asm__("wfi");
 

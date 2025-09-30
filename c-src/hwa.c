@@ -9,13 +9,13 @@
 // TODO: these are here just temporarily to easily tune CFAR and they should be moved to cfg.h or something
 // How many cells to use for noise averaging for CUT
 // actual value used is val * 2
-#define CFAR_NUM_NOISE_LEFT     3
-#define CFAR_NUM_NOISE_RIGHT    3
+#define CFAR_NUM_NOISE_LEFT     6
+#define CFAR_NUM_NOISE_RIGHT    6
 // Guard cells (pretty self-explanatory)
 #define CFAR_NUM_GUARD_CELLS    3
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
-#define CFAR_AVG_DIV_FACTOR     0
+#define CFAR_AVG_DIV_FACTOR     8
 
 #define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
 
@@ -26,13 +26,14 @@
 // We're inputting complex samples so have the HWA perform a magnitude operation for us
 #define CFAR_OPER_MODE      (HWA_CFAR_OPER_MODE_MAG_INPUT_REAL)
 
-// Documentation is a bit confusing on this but this should output noise avg values on I channel (same for all?) and CUT on Q
 #define CFAR_OUTPUT_MODE    (HWA_CFAR_OUTPUT_MODE_I_PEAK_IDX_Q_CUT)
 
 // No idea what these really do as of now
 #define CFAR_ADV_OUT_MODE   (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_DISABLE)
+
+#define CFAR_THRESHOLD 1//(16838 << 4 | 1)
 
 
 
@@ -217,16 +218,16 @@ static HWA_ParamConfig cfarCfg = {
         .srcIQSwap = HWA_FEATURE_BIT_DISABLE,
     },
     .dest = {
-        .dstAddr = 0x4000,
+        .dstAddr = 0x8000,
         .dstAcnt = 127,
-        .dstAIdx = 4,
-        .dstBIdx = 128 * 4, // ignored in detected peaks mode
+        .dstAIdx = 8,
+       // .dstBIdx = 128 * 8, // ignored in detected peaks mode
         // Does this even get applied with cfar? maybe required since the output is in I/Q form?
         .dstRealComplex = HWA_SAMPLES_FORMAT_COMPLEX, 
         .dstWidth = HWA_SAMPLES_WIDTH_32BIT, // output is 24 bit so need to make this larger
         .dstSign = HWA_SAMPLES_UNSIGNED,
         .dstConjugate = HWA_FEATURE_BIT_DISABLE,
-        .dstScale = 8,
+        .dstScale = 0,
         .dstSkipInit = 0,
         .dstIQswap = HWA_FEATURE_BIT_DISABLE,
     },
@@ -248,7 +249,6 @@ uint32_t hwa_getaddr(HWA_Handle handle){
 
 
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
-    DSSHWACCPARAMRegs *pparam = (DSSHWACCPARAMRegs*)gHwaObjectPtr[0]->hwAttrs->paramBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &HwaParamConfig[0], NULL);
 
@@ -263,7 +263,14 @@ void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
 
 
 void hwa_cfar(HWA_Handle handle){
+    DSSHWACCPARAMRegs *pparam = (DSSHWACCPARAMRegs*)gHwaObjectPtr[0]->hwAttrs->paramBaseAddr;
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
+    pregs->CFAR_THRESH = CFAR_THRESHOLD;
+   // int32_t ret = HWA_configCFARThresholdScale(CFAR_THRESHOLD);
+    //DebugP_log("cfar threshold: %d\r\n",ret);
+
+
     HWA_enable(handle, 1);
     HWA_reset(handle);
     HWA_setSoftwareTrigger(handle, HWA_TRIG_MODE_SOFTWARE);
