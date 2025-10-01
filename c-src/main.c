@@ -125,7 +125,7 @@ MMWave_ProfileHandle gMmwProfiles[MMWAVE_MAX_PROFILE];
 SemaphoreP_Object gAdcSampledSem;
 SemaphoreP_Object gBtnPressedSem;
 SemaphoreP_Object gEdmaDoneSem;
-SemaphoreP_Object gHwaDoneSem;
+SemaphoreP_Object gCfarDoneSem;
 SemaphoreP_Object gFrameDoneSem;
 
 /* Rest of them */
@@ -134,7 +134,11 @@ static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
 #include "BIG.h"
 //static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
-static int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
+int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
+// This can and should really be smaller since if we're detecting literally every single point, something is wrong
+// but for now that can happen so keep this large
+uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME] __attribute__((scetion(".bss.dss_l32")));
+
 
 
 static inline void fail(void){
@@ -151,6 +155,14 @@ void edma_callback(Edma_IntrHandle handle, void *args){
 }
 
 
+// TODO: combine these 2 cbs to one and use arguments instead
+void hwa_cfar_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
+    HWA_reset(gHwaHandle[0]);
+    printf("Cfar cb\r\n");
+    SemaphoreP_post(&gCfarDoneSem);
+}
+
+
 void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
     HWA_reset(gHwaHandle[0]);
 
@@ -160,11 +172,42 @@ void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
 
 }
 
-
 static void frame_done(Edma_IntrHandle handle, void *args){
         HWA_enable(gHwaHandle[0], 0);
         edma_reset_hwal3_param();
         SemaphoreP_post(&gFrameDoneSem);
+}
+
+// TODO: this shouldn't and  won't stay here
+// and all of this should be implemented with DMA anyways
+static void run_cfar(){
+    int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
+    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0])+0x10000);
+    // We're running it through 4 times 
+    // This should be an argument and could just be made recursive
+    // but doesn't matter since it's temporary
+    static int iteration = 0;
+    if(iteration > 4 ){
+        iteration = 0;
+    }
+
+    size_t offset = iteration * NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4);
+    for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
+        hwain[i] = gSampleBuff[i + offset];
+    }
+    DebugP_log("Running cfar hwa\r\n");
+    HWA_enable(gHwaHandle[0], 1);
+
+    hwa_run(gHwaHandle[0]);
+
+    SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
+    HWA_enable(gHwaHandle[0], 0);
+    // TODO: this needs to work off of CFAR_PEAKCNT
+    for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
+        gCfarResults[i + offset] = hwaout[i];
+    }
+
+    iteration++;
 }
 
 
@@ -190,7 +233,7 @@ static void main_task(void *args){
     HwiP_enable();
 while(1){
     ClockP_usleep(5000);
-   // while(gState){
+    while(gState){
         // This might be unnecessary but we have encountered situations
         // in which the system ends up locked with interrupts seemingly disabled
         // so make sure they are re-enabled at the start of each frame 
@@ -200,34 +243,34 @@ while(1){
         HWA_enable(gHwaHandle[0], 1U);
 
 
-       // mmw_start(gMmwHandle, &err);
+        mmw_start(gMmwHandle, &err);
 
         // Make sure wait ticks is not set to SystemP_WAIT_FOREVER
         // At times the device seems to end up in a deadlock forever looping in the idle task
         // and having a timeout here makes sure that the system never ends up stuck here 
         // this does mean that in some cases a duplicate frame may be sent but operation 
         // seems to resume normally afterwards
-       // SemaphoreP_pend(&gFrameDoneSem, 500);
+        SemaphoreP_pend(&gFrameDoneSem, 500);
 
-       // MMWave_stop(gMmwHandle, &err);
+        MMWave_stop(gMmwHandle, &err);
 
-        int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
-        for(size_t i = 0; i < NUM_RANGEBINS; ++i){
-            hwain[i] = gFrameTest[i];
+        hwa_cfar_init(gHwaHandle[0], hwa_cfar_cb);
+
+        ret = SemaphoreP_constructBinary(&gCfarDoneSem, 0);
+        DebugP_assert(ret == 0);
+
+
+        for(int i = 0; i < 4; ++i){
+            run_cfar();
         }
-        hwa_cfar(gHwaHandle[0]);
 
-     //   ClockP_usleep(1000*50);
-    //    hwa_cfar(gHwaHandle[0]);
-
-        ClockP_usleep(1000*50);
-
+/*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
         uint16_t peakcnt = pregs->CFAR_PEAKCNT & 0x00000fff;
         printf("%hu\r\n",peakcnt);
+*/
 
-
-
+        printf("Done\r\n");
         while(1)__asm__("wfi");
 
 
@@ -237,7 +280,7 @@ while(1){
             udp_send_data((void*)(gSampleBuff + (i * UDP_BYTES_PER_PKT)), UDP_BYTES_PER_PKT);
         }
         udp_send_data((void*)&footer, 4);*/
-   // }
+    }
 }
     while(1)__asm__("wfi");
 
