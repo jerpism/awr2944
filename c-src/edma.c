@@ -20,21 +20,13 @@
 
 static Edma_IntrObject gIntrObjAdcHwa;
 static Edma_IntrObject gIntrObjHwaL3;
-static Edma_IntrObject gIntrObjDfftRows;
-static Edma_IntrObject gIntrObjDfftCols;
+
 
 
 static uint32_t gbaseaddr;
 static uint32_t ghwal3param;
 static EDMACCPaRAMEntry edmaparam;
 
-
-void edma_write(){
-    // Write 1 to EDMA_TPCC_ESR to trigger a transfer
-    // TODO: probably replace this with the proper function?
-    volatile uint32_t * const addr = (uint32_t*)(EDMA_getBaseAddr(gEdmaHandle[0])+0x1010);
-    *addr = 0b1;
-}
 
 
 // This is terrible but for some reason the bcnt and dstbidx aren't being reloaded properly
