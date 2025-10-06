@@ -18,9 +18,9 @@
 #include <cfg.h>
 
 
+
 static Edma_IntrObject gIntrObjAdcHwa;
 static Edma_IntrObject gIntrObjHwaL3;
-
 
 
 static uint32_t gbaseaddr;
@@ -38,72 +38,87 @@ void edma_reset_hwal3_param(){
     EDMA_setPaRAM(gbaseaddr, ghwal3param, &edmaparam);
 }
 
-
+// The HWA to L3 EDMA path will write data to L3 in accordance with TI's radar cube DATA_FORMAT_1
+// which means complex samples in order of [numTXPatterns][numDopplerChirps][numRX][numRangeBins].
+// This is achieved by rotating numTX (4) sets of EDMA params where the offset is set by idx(tx) * doppler *  numrx * rbins * sizeof(int16reim_t)
 void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t acnt, uint16_t bcnt, uint16_t ccnt){
     uint32_t base = 0;
     uint32_t region = 0;
-    uint32_t ch = 0;
     uint32_t tcc = 0;
-    uint32_t param = 0;
     int32_t ret = 0;
-    uint8_t *srcp = (uint8_t*)src;
-    uint8_t *dstp = (uint8_t*)dst;
+    uint32_t param;
 
+    uint32_t ch[4];
+    uint32_t params[4];
+    EDMACCPaRAMEntry edmaparams[4];
 
-    DebugP_log("EDMA: Configuring hwa to l3\r\n");
-    /* This channel is used for HWAOUT->DSS_L3 transfering of data */
     base = EDMA_getBaseAddr(handle);
-    DebugP_assert(base != 0);
-
     region = EDMA_getRegionId(handle);
-    DebugP_assert(region < SOC_EDMA_NUM_REGIONS);
 
-    //&ch = EDMA_RESOURCE_ALLOC_ANY
-    ch = 3;
-    ret = EDMA_allocDmaChannel(handle, &ch);
-    DebugP_assert(ret == 0);
+    // start with channel 3
+    for(int i = 0; i < 4; ++i){
+        ch[i] = 3+i;
+        ret = EDMA_allocDmaChannel(handle, &ch[i]);
+        DebugP_assert(ret == 0);
+    }
+
+    for(int i = 0; i < 4; ++i){
+        params[i] = EDMA_RESOURCE_ALLOC_ANY;
+        ret = EDMA_allocParam(handle,  &params[i]);
+        DebugP_assert(ret == 0);
+    }
+
+    for(int i = 0; i < 4; ++i){
+        EDMA_configureChannelRegion(base, region, EDMA_CHANNEL_TYPE_DMA, ch[i], tcc , params[i], 0);
+    }   
+
+    for(int i = 0; i < 4; ++i){
+        EDMA_ccPaRAMEntry_init(&edmaparams[i]);  
+        edmaparams[i].destAddr      = (uint32_t) (SOC_virtToPhy(dst) + (i * NUM_DOPPLER_CHIRPS * NUM_RX_ANTENNAS * NUM_RANGEBINS * CPLX_SAMPLE_SIZE));
+
+        edmaparams[i].srcAddr       = (uint32_t) SOC_virtToPhy(src);
+        edmaparams[i].aCnt          = (uint16_t) acnt;
+        edmaparams[i].bCnt          = (uint16_t) bcnt;
+        edmaparams[i].cCnt          = (uint16_t) ccnt;
+        edmaparams[i].bCntReload    = (uint16_t) bcnt;
+
+        // Always reading from HWA 
+        edmaparams[i].srcBIdx       = 0;
+        edmaparams[i].srcBIdxExt    = 0;
+        edmaparams[i].srcCIdx       = acnt;
+
+        edmaparams[i].destBIdx      = (int16_t)EDMA_PARAM_BIDX(acnt);
+        edmaparams[i].destBIdxExt   = (int8_t)EDMA_PARAM_BIDX_EXT(acnt);
+        edmaparams[i].destCIdx      = acnt;
+
+        edmaparams[i].linkAddr      = 0xffff;//params[i];
+
+        edmaparams[i].opt           = (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK) | ((((uint32_t)tcc)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK);
+
+
+        EDMA_setPaRAM(base, params[i], &edmaparams[i]);
+
+    }
+
+
 
     tcc = EDMA_RESOURCE_ALLOC_ANY;
     ret = EDMA_allocTcc(handle, &tcc);
+
     DebugP_assert(ret == 0);
 
-    param = EDMA_RESOURCE_ALLOC_ANY;
-    ret = EDMA_allocParam(handle, &param);
-
-    // Terrible hack zone
-    gbaseaddr = base;
-    ghwal3param = param;
-    // you are safe now
+    for(int i = 0; i < 4; ++i){
+        EDMA_enableTransferRegion(base, region, ch[i], EDMA_TRIG_MODE_EVENT);
+    }
 
 
-    DebugP_log("EDMA: base: %#x, region: %u, ch: %u, tcc: %u, param: %u\r\n",base,region,ch,tcc,param);
 
-    EDMA_configureChannelRegion(base, region, EDMA_CHANNEL_TYPE_DMA, ch, tcc , param, 1);
-    EDMA_ccPaRAMEntry_init(&edmaparam);
-    edmaparam.srcAddr       = (uint32_t) SOC_virtToPhy(srcp);
-    edmaparam.destAddr      = (uint32_t) SOC_virtToPhy(dstp);
-    edmaparam.aCnt          = (uint16_t) acnt;     
-    edmaparam.bCnt          = (uint16_t) bcnt;    
-    edmaparam.cCnt          = (uint16_t) ccnt;
-    edmaparam.bCntReload    = (uint16_t) bcnt;
-    // Since we're always reading what's at the HWA output srcBIdx should be left as 0
-    edmaparam.srcBIdx       = 0;
-    edmaparam.destBIdx      = (int16_t)EDMA_PARAM_BIDX(acnt);
-    edmaparam.srcCIdx       = acnt;
-    edmaparam.destCIdx      = acnt;
-    edmaparam.linkAddr      = 0xFFFF; // don't link as we're resetting it in another place
-    edmaparam.srcBIdxExt    = 0;
-    edmaparam.destBIdxExt   = (int8_t) EDMA_PARAM_BIDX_EXT(acnt);
-    // We only want to get an interrupt when a whole frame has been moved to L3
-    edmaparam.opt |= (EDMA_OPT_TCINTEN_MASK | ((((uint32_t)tcc)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK));
-    EDMA_setPaRAM(base, param, &edmaparam);
 
     gIntrObjHwaL3.tccNum = tcc;
     gIntrObjHwaL3.cbFxn = cb;
     gIntrObjHwaL3.appData = (void*)0;
     EDMA_registerIntr(gEdmaHandle[0], &gIntrObjHwaL3);
-    EDMA_enableEvtIntrRegion(base, region, ch);
-    EDMA_enableTransferRegion(base, region, ch, EDMA_TRIG_MODE_EVENT);
+    EDMA_enableEvtIntrRegion(base, region, ch[3]);
 }
 
 
