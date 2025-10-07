@@ -27,6 +27,12 @@ static uint32_t gbaseaddr;
 static uint32_t ghwal3param;
 static EDMACCPaRAMEntry edmaparam;
 
+static EDMACCPaRAMEntry edmaparams[4];
+
+static uint32_t params[4];
+
+
+
 
 
 // This is terrible but for some reason the bcnt and dstbidx aren't being reloaded properly
@@ -35,7 +41,9 @@ static EDMACCPaRAMEntry edmaparam;
 // Forcefully reloading a param set seems to reset those internal counters as intended but
 // this is a slow, inelegant solution that will probably be the cause of some unforeseen consequences
 void edma_reset_hwal3_param(){
-    EDMA_setPaRAM(gbaseaddr, ghwal3param, &edmaparam);
+    for(int i = 0; i < 4; ++i){
+        EDMA_setPaRAM(gbaseaddr, params[i], &edmaparams[i]);
+    }
 }
 
 // The HWA to L3 EDMA path will write data to L3 in accordance with TI's radar cube DATA_FORMAT_1
@@ -49,11 +57,13 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     uint32_t param;
 
     uint32_t ch[4];
-    uint32_t params[4];
-    EDMACCPaRAMEntry edmaparams[4];
 
     base = EDMA_getBaseAddr(handle);
+    gbaseaddr = base;
     region = EDMA_getRegionId(handle);
+
+    tcc = EDMA_RESOURCE_ALLOC_ANY;
+    ret = EDMA_allocTcc(handle, &tcc);
 
     // start with channel 3
     for(int i = 0; i < 4; ++i){
@@ -93,7 +103,7 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
 
         edmaparams[i].linkAddr      = 0xffff;//params[i];
 
-        edmaparams[i].opt           = (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK) | ((((uint32_t)tcc)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK);
+        edmaparams[i].opt           = (EDMA_OPT_TCINTEN_MASK) | ((((uint32_t)tcc)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK);
 
 
         EDMA_setPaRAM(base, params[i], &edmaparams[i]);
@@ -102,8 +112,7 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
 
 
 
-    tcc = EDMA_RESOURCE_ALLOC_ANY;
-    ret = EDMA_allocTcc(handle, &tcc);
+
 
     DebugP_assert(ret == 0);
 
@@ -118,7 +127,7 @@ void edma_configure_hwa_l3(EDMA_Handle handle, void *cb, void *dst, void *src, u
     gIntrObjHwaL3.cbFxn = cb;
     gIntrObjHwaL3.appData = (void*)0;
     EDMA_registerIntr(gEdmaHandle[0], &gIntrObjHwaL3);
-    EDMA_enableEvtIntrRegion(base, region, ch[3]);
+    EDMA_enableEvtIntrRegion(base, region, 6);
 }
 
 
@@ -222,12 +231,6 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     // seems to get stuck in something without the interrupts enabled
     edmaparam1.opt |= (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK | ((((uint32_t)tcc1)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK));
     EDMA_setPaRAM(base, param1, &edmaparam1);
-    // Same thing here, does linking to itself with this work?
-   // EDMA_linkChannel(base, param1, param1);
-
-    // TODO: figure out these too but having TCCHEN and ITCCHEN seems to work
-    uint32_t chainoptions = (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK | EDMA_OPT_TCCHEN_MASK | EDMA_OPT_ITCCHEN_MASK);
-   // EDMA_chainChannel(base, param, ch1, chainoptions);
 
 
     gIntrObjAdcHwa.tccNum = tcc;
