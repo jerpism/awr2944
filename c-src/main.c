@@ -132,12 +132,11 @@ SemaphoreP_Object gFrameDoneSem;
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
 static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
-#include "BIG.h"
 //static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
 int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
 // This can and should really be smaller since if we're detecting literally every single point, something is wrong
 // but for now that can happen so keep this large
-uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME] __attribute__((scetion(".bss.dss_l32")));
+uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME * NUM_RX_ANTENNAS] __attribute__((section(".bss.dss_l32")));
 
 
 
@@ -163,19 +162,32 @@ void hwa_cfar_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
 }
 
 
+static volatile int chcounter = 0;
 void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
+    static volatile int next = 3;
     HWA_reset(gHwaHandle[0]);
+    if(next == 6){
+        chcounter++;
+    }
+    EDMA_setEvtRegion(EDMA_getBaseAddr(gEdmaHandle[0]), 0, next);
 
-    // TODO: don't blindly guess channel number here but that's an issue for future me
-    // and it should always be 2 anyways
-    EDMA_setEvtRegion(EDMA_getBaseAddr(gEdmaHandle[0]), 0, 3);
 
+
+    if(next + 1 > 6){
+        next = 3;
+    }else{
+        ++next;
+    }
 }
 
+
+
 static void frame_done(Edma_IntrHandle handle, void *args){
-        HWA_enable(gHwaHandle[0], 0);
-        edma_reset_hwal3_param();
-        SemaphoreP_post(&gFrameDoneSem);
+    HWA_enable(gHwaHandle[0], 0);
+    edma_reset_hwal3_param();
+    SemaphoreP_post(&gFrameDoneSem);
+    printf("Frame done\r\n");
+
 }
 
 // TODO: this shouldn't and  won't stay here
@@ -203,11 +215,11 @@ static void run_cfar(){
     SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
     HWA_enable(gHwaHandle[0], 0);
     // TODO: this needs to work off of CFAR_PEAKCNT
-    for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
-        gCfarResults[i + offset] = hwaout[i];
-    }
+  //  for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
+  //      gCfarResults[i + offset] = hwaout[i];
+   // }
 
-    iteration++;
+    //iteration++;
 }
 
 
@@ -254,15 +266,10 @@ while(1){
 
         MMWave_stop(gMmwHandle, &err);
 
-        hwa_cfar_init(gHwaHandle[0], hwa_cfar_cb);
+        printf("chcounter: %d\r\n",chcounter);
 
-        ret = SemaphoreP_constructBinary(&gCfarDoneSem, 0);
-        DebugP_assert(ret == 0);
-
-
-        for(int i = 0; i < 4; ++i){
-            run_cfar();
-        }
+       
+       // run_cfar();
 
 /*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
@@ -270,8 +277,7 @@ while(1){
         printf("%hu\r\n",peakcnt);
 */
 
-        printf("Done\r\n");
-        while(1)__asm__("wfi");
+    //    while(1)__asm__("wfi");
 
 
      
@@ -322,6 +328,11 @@ static void init_task(void *args){
     DebugP_log("HWA address is %#x\r\n",hwaaddr);
     DebugP_log("Done.\r\n");
 
+  //  hwa_cfar_init(gHwaHandle[0], hwa_cfar_cb);
+
+    ret = SemaphoreP_constructBinary(&gCfarDoneSem, 0);
+    DebugP_assert(ret == 0);
+
 
     DebugP_log("Init network...\r\n");
 //    network_init(NULL);
@@ -352,7 +363,7 @@ static void init_task(void *args){
     // and EDMA
     DebugP_log("Init edma...\r\n");
     edma_configure(gEdmaHandle[0],&edma_callback, (void*)hwaaddr, (void*)adcaddr, CHIRP_DATASIZE, 1, 1);
-    edma_configure_hwa_l3(gEdmaHandle[0], &frame_done, (void*)&gSampleBuff, (void*)(hwaaddr+0x4000),  CHIRP_DATASIZE,  CHIRPS_PER_FRAME, 1);
+    edma_configure_hwa_l3(gEdmaHandle[0], &frame_done, (void*)&gSampleBuff, (void*)(hwaaddr+0x4000),  CHIRP_DATASIZE,  NUM_DOPPLER_CHIRPS, 1);
    
     DebugP_log("Done.\r\n");
 
