@@ -133,7 +133,8 @@ volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
 static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
 //static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
-int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
+//int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
+int16reim_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
 // This can and should really be smaller since if we're detecting literally every single point, something is wrong
 // but for now that can happen so keep this large
 uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME * NUM_RX_ANTENNAS] __attribute__((section(".bss.dss_l32")));
@@ -205,7 +206,7 @@ static void run_cfar(){
 
     size_t offset = iteration * NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4);
     for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
-        hwain[i] = gSampleBuff[i + offset];
+    //    hwain[i] = gSampleBuff[i + offset];
     }
     DebugP_log("Running cfar hwa\r\n");
     HWA_enable(gHwaHandle[0], 1);
@@ -220,6 +221,19 @@ static void run_cfar(){
    // }
 
     //iteration++;
+}
+
+
+static void run_doppler(){
+    int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
+    // Copy data for a given rangebin
+    for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
+        for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
+            for(int dc = 0; dc < NUM_DOPPLER_CHIRPS; ++dc){
+                *(hwain + (tx * rx * dc) + (rx * dc) + dc) = gSampleBuff[tx][dc][rx][0];
+            }
+        }
+    }
 }
 
 
@@ -266,10 +280,8 @@ while(1){
 
         MMWave_stop(gMmwHandle, &err);
 
-        printf("chcounter: %d\r\n",chcounter);
-
        
-       // run_cfar();
+        run_doppler();
 
 /*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
@@ -277,7 +289,7 @@ while(1){
         printf("%hu\r\n",peakcnt);
 */
 
-    //    while(1)__asm__("wfi");
+        while(1)__asm__("wfi");
 
 
      
