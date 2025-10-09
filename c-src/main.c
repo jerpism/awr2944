@@ -280,7 +280,7 @@ static void run_doppler(){
 
         SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
 
-        // Once we have the result in HWA output, calculate a log2 sum of magnitudes across the virtual receivers
+        // Once we have the result in HWA output, calculate a sum of log2 magnitudes across the virtual receivers
         // and insert it into the [range][doppler] detection matrix
         // this can then be input to CFAR
         sum_doppler_result(i);
