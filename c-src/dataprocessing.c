@@ -46,7 +46,7 @@ void calc_doppler_fft(HWA_Handle hwahandle, void *in, void *out){
 }
 
 
-void calc_abs_vals(int16reim_t *in, uint16_t *out, size_t n){
+void calc_abs_vals(int16imre_t *in, uint16_t *out, size_t n){
     for(size_t i = 0; i < n; i++){
         out[i] = (uint16_t)sqrt(SQUARE_I16(in[i].re) + SQUARE_I16(in[i].im));
     }
@@ -82,7 +82,7 @@ void convolve_1d(const float* a, int n, const float* b, int m, float* output) {
 
 
 // This is only really set up to deal with n up to 128
-void dp_cfar(uint8_t rx, uint8_t chirp, int16reim_t *data, uint8_t n) {
+void dp_cfar(uint8_t rx, uint8_t chirp, int16imre_t *data, uint8_t n) {
     float p_fa = P_FA;
     float threshold[128];
     int guard_len = 0;
@@ -127,7 +127,7 @@ void dp_cfar(uint8_t rx, uint8_t chirp, int16reim_t *data, uint8_t n) {
 // rx is the number of receivers enabled
 // chirps is the number of chirps (and thus dopper bins) 
 // rbins is the number of rangebins
-void process_data(int16reim_t *data, uint8_t rx_cnt, uint16_t chirps, uint8_t rbins){
+void process_data(int16imre_t *data, uint8_t rx_cnt, uint16_t chirps, uint8_t rbins){
     // Reset detections
     memset(range_detected, 0, sizeof(range_detected));
 
@@ -138,7 +138,7 @@ void process_data(int16reim_t *data, uint8_t rx_cnt, uint16_t chirps, uint8_t rb
     // e.g. check if the same chirp's rbin was detected on all 4 or a majority to count it
     for(uint8_t i = 0; i < rx_cnt; ++i){
         for(uint8_t j = 0; j < chirps; ++j){
-            int16reim_t *dp = data + (i * rbins) + (j * NUM_RX_ANTENNAS * rbins);
+            int16imre_t *dp = data + (i * rbins) + (j * NUM_RX_ANTENNAS * rbins);
             dp_cfar(i, j, dp, rbins);
         }
     }
@@ -148,7 +148,7 @@ void process_data(int16reim_t *data, uint8_t rx_cnt, uint16_t chirps, uint8_t rb
     // Next, figure out which rangebins we should calculate the doppler for
     // TODO: 20 is used as a placeholder value for threshold here, this can and should be changed
     // TODO: add handling for 4 rx here
-    int16reim_t *hwain = (int16reim_t*)hwa_getaddr(gHwaHandle[0]);
+    int16imre_t *hwain = (int16imre_t*)hwa_getaddr(gHwaHandle[0]);
     uint8_t threshold = 10;
     uint8_t cnt = 0;
 
