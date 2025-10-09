@@ -99,6 +99,8 @@ TaskHandle_t gDpcTask;
 HWA_Handle gHwaHandle[1];
 
 #define GET_SAMPLE_IDX(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
+#define SQUARE_I16(x) (((int32_t)x) * ((int32_t)x))
+
 
 /* == Function Declarations == */
 /* ISRs */
@@ -127,14 +129,15 @@ SemaphoreP_Object gBtnPressedSem;
 SemaphoreP_Object gEdmaDoneSem;
 SemaphoreP_Object gCfarDoneSem;
 SemaphoreP_Object gFrameDoneSem;
+SemaphoreP_Object gDopplerDoneSem;
 
 /* Rest of them */
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
 static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
-//static uint8_t gSampleBuff[FRAME_DATASIZE] __attribute__((section(".bss.dss_l3")));
-//int16reim_t gSampleBuff[FRAME_DATASIZE / sizeof(int16reim_t)] __attribute__((section(".bss.dss_l3")));
-int16reim_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
+int16imre_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
+uint16_t detmatrix[NUM_RANGEBINS][NUM_DOPPLER_CHIRPS];
+
 // This can and should really be smaller since if we're detecting literally every single point, something is wrong
 // but for now that can happen so keep this large
 uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME * NUM_RX_ANTENNAS] __attribute__((section(".bss.dss_l32")));
@@ -191,10 +194,15 @@ static void frame_done(Edma_IntrHandle handle, void *args){
 
 }
 
+void hwa_doppler_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
+    SemaphoreP_post(&gDopplerDoneSem);
+}
+
+
 // TODO: this shouldn't and  won't stay here
 // and all of this should be implemented with DMA anyways
 static void run_cfar(){
-    int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
     uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0])+0x10000);
     // We're running it through 4 times 
     // This should be an argument and could just be made recursive
@@ -223,17 +231,50 @@ static void run_cfar(){
     //iteration++;
 }
 
-
-static void run_doppler(){
-    int16reim_t *hwain = (int16reim_t*)(hwa_getaddr(gHwaHandle[0]));
+static inline void move_doppler_to_hwa(int rbin){
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
     // Copy data for a given rangebin
     for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
         for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
             for(int dc = 0; dc < NUM_DOPPLER_CHIRPS; ++dc){
-                *(hwain + (tx * rx * dc) + (rx * dc) + dc) = gSampleBuff[tx][dc][rx][0];
+                *(hwain + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + dc) = gSampleBuff[tx][dc][rx][rbin];
             }
         }
     }
+}
+
+
+static inline uint16_t log2mag(int16imre_t val){
+    return (uint16_t) (log2(sqrt(SQUARE_I16(val.re) + SQUARE_I16(val.im))));
+}
+
+
+static inline void sum_doppler_result(int rbin){
+    int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
+    for(int db = 0; db < NUM_DOPPLER_CHIRPS; ++db){
+        for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
+            for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
+                detmatrix[rbin][db] += log2mag(*(hwaout + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + db));
+            }
+        }
+    }
+
+}
+
+
+static void run_doppler(){
+    SemaphoreP_constructBinary(&gDopplerDoneSem, 0);
+    hwa_doppler_init(gHwaHandle[0], &hwa_doppler_cb);
+
+    move_doppler_to_hwa( 1);
+    hwa_run(gHwaHandle[0]);
+
+    SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
+
+    printf("detmatrix address %p\r\n",&detmatrix);
+    sum_doppler_result(1);
+
+  
 }
 
 
