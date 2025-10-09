@@ -32,6 +32,7 @@
 
 /* TI Header files */
 #include <stdlib.h>
+#include <math.h>
 
 
 #include "FreeRTOS.h"
@@ -337,6 +338,7 @@ while(1){
 
        
         run_doppler();
+        run_cfar();
 
 /*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
