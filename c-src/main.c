@@ -268,20 +268,25 @@ static inline void sum_doppler_result(int rbin){
 static void run_doppler(){
     SemaphoreP_constructBinary(&gDopplerDoneSem, 0);
     hwa_doppler_init(gHwaHandle[0], &hwa_doppler_cb);
-    // TODO: replace all of this with EDMA
-    // First, move the data for a given rangebin to the HWA input and run it
-    // this will change the order to [TX][RX][DC]
-    move_doppler_to_hwa( 1);
-    hwa_run(gHwaHandle[0]);
 
-    SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
+    for(int i = 0; i < NUM_RANGEBINS; ++i){
+        // TODO: replace all of this with EDMA
+        // First, move the data for a given rangebin to the HWA input and run it
+        // this will change the order to [TX][RX][DC]
+        move_doppler_to_hwa( i);
+        HWA_reset(gHwaHandle[0]);
 
-    printf("detmatrix address %p\r\n",&detmatrix);
+        hwa_run(gHwaHandle[0]);
 
-    // Once we have the result in HWA output, calculate a log2 sum of magnitudes across the virtual receivers
-    // and insert it into the [range][doppler] detection matrix
-    // this can then be input to CFAR
-    sum_doppler_result(1);
+        SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
+
+        // Once we have the result in HWA output, calculate a log2 sum of magnitudes across the virtual receivers
+        // and insert it into the [range][doppler] detection matrix
+        // this can then be input to CFAR
+        sum_doppler_result(i);
+    }
+
+        printf("detmatrix address %p\r\n",&detmatrix);
 
   
 }
