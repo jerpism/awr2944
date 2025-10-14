@@ -7,13 +7,13 @@
 // which is far from ideal (and also violates aliasing rules without -fno-strict-aliasing).
 // Putting them in a struct should simplify things
 typedef struct __attribute__((packed)) {
-#ifdef CPLX_FMT_IQSWAP
-    int16_t re;
-    int16_t im;
-#else
     int16_t im;
     int16_t re;
-#endif
  } int16imre_t;
+
+ typedef struct __attribute___((packed)){
+    int16_t re;
+    int16_t im;
+ }int16reim_t;
 
 #endif /* TYPES_H */
