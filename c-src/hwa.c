@@ -12,10 +12,10 @@
 #define CFAR_NUM_NOISE_LEFT     4
 #define CFAR_NUM_NOISE_RIGHT    4
 // Guard cells (pretty self-explanatory)
-#define CFAR_NUM_GUARD_CELLS    3
+#define CFAR_NUM_GUARD_CELLS    0
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
-#define CFAR_AVG_DIV_FACTOR     7
+#define CFAR_AVG_DIV_FACTOR     3
 
 #define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
 
@@ -23,8 +23,7 @@
 #define CFAR_OS_KVALUE          0
 #define CFAR_OS_EDGE_KSCALE_EN  0
 
-// We're inputting complex samples so have the HWA perform a magnitude operation for us
-#define CFAR_OPER_MODE      (HWA_CFAR_OPER_MODE_MAG_INPUT_REAL)
+#define CFAR_OPER_MODE      (HWA_CFAR_OPER_MODE_LOG_INPUT_REAL)
 
 #define CFAR_OUTPUT_MODE    (HWA_CFAR_OUTPUT_MODE_I_PEAK_IDX_Q_CUT)
 
@@ -33,7 +32,7 @@
 #define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_DISABLE)
 
-#define CFAR_THRESHOLD (0 << 4 | 15)
+#define CFAR_THRESHOLD (0)
 
 
 
@@ -205,32 +204,31 @@ static HWA_ParamConfig cfarCfg = {
     },
     .source = {
         .srcAddr = 0,
-        .srcAcnt = NUM_RANGEBINS - 1,
-        .srcAIdx = sizeof(int16imre_t),
-        // We can fit a quarter of the data in at once so 32 chirps 128 rbins 4 rx and 4 bytes per sample = 32 * 128 * 4 * 4 = 64K
-        // so bcnt will be chirps / 4  * rx = 32 * 4
-        .srcBcnt = 32,
-        .srcBIdx = 128 * sizeof(int16imre_t),
+        // Data being fed in is log2 magnitude as uint16
+        .srcAcnt = NUM_DOPPLER_CHIRPS - 1,
+        .srcAIdx = sizeof(uint16_t),
+        .srcBcnt = NUM_RANGEBINS,
+        .srcBIdx = NUM_DOPPLER_CHIRPS * sizeof(uint16_t),
         // These don't seem to get applied during CFAR
         .srcCcnt = 1,
         .srcCIdx = 0,
         .srcAcircShift = 0,
         .srcAcircShiftWrap = 0,
         .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
-        .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
+        .srcRealComplex = HWA_SAMPLES_FORMAT_REAL,
         .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
-        .srcSign = HWA_SAMPLES_SIGNED,
+        .srcSign = HWA_SAMPLES_UNSIGNED,
         .srcConjugate = HWA_FEATURE_BIT_DISABLE,
         .srcScale = 8,
         .srcIQSwap = HWA_FEATURE_BIT_DISABLE,
     },
     .dest = {
         .dstAddr = 0x10000,
-        .dstAcnt = 4095,
-        .dstAIdx = 4,
-        .dstBIdx = 128 * 4, // ignored in detected peaks mode
+        .dstAcnt = NUM_DOPPLER_CHIRPS * NUM_RANGEBINS - 1,
+        .dstAIdx = sizeof(uint32_t),
+        .dstBIdx = 0, // ignored in detected peaks mode
         .dstRealComplex = HWA_SAMPLES_FORMAT_REAL, // For now we just care about detections so suppress Q channel 
-        .dstWidth = HWA_SAMPLES_WIDTH_32BIT, // output is 24 bit so need to make this larger
+        .dstWidth = HWA_SAMPLES_WIDTH_32BIT, // output is 24 bit so this should be bigger (can maybe get away with 16 using scaling?)
         .dstSign = HWA_SAMPLES_UNSIGNED,
         .dstConjugate = HWA_FEATURE_BIT_DISABLE,
         // Essentially shifts the result 8 bits to the right
@@ -277,6 +275,7 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
     pregs->CFAR_THRESH = CFAR_THRESHOLD;
+
    // int32_t ret = HWA_configCFARThresholdScale(CFAR_THRESHOLD);
     //DebugP_log("cfar threshold: %d\r\n",ret);
     HWA_InterruptConfig intrcfg;
@@ -285,7 +284,7 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     intrcfg.cpu.callbackFn = cb;
     HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
     HWA_enable(handle, 1);
-
+    HWA_reset(handle);
 //    HWA_enable(handle, 1);
 //    HWA_reset(handle);
 //    HWA_setSoftwareTrigger(handle, HWA_TRIG_MODE_SOFTWARE);

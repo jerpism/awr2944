@@ -102,6 +102,10 @@ HWA_Handle gHwaHandle[1];
 #define GET_SAMPLE_IDX(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
 #define SQUARE_I16(x) (((int32_t)x) * ((int32_t)x))
 
+struct detected_point{
+    uint16_t range;
+    uint16_t doppler;
+};
 
 /* == Function Declarations == */
 /* ISRs */
@@ -161,8 +165,6 @@ void edma_callback(Edma_IntrHandle handle, void *args){
 
 // TODO: combine these 2 cbs to one and use arguments instead
 void hwa_cfar_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
-    HWA_reset(gHwaHandle[0]);
-    printf("Cfar cb\r\n");
     SemaphoreP_post(&gCfarDoneSem);
 }
 
@@ -199,37 +201,34 @@ void hwa_doppler_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
     SemaphoreP_post(&gDopplerDoneSem);
 }
 
+static void construct 
 
 // TODO: this shouldn't and  won't stay here
 // and all of this should be implemented with DMA anyways
-static void run_cfar(){
-    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
-    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0])+0x10000);
-    // We're running it through 4 times 
-    // This should be an argument and could just be made recursive
-    // but doesn't matter since it's temporary
-    static int iteration = 0;
-    if(iteration > 4 ){
-        iteration = 0;
+// returns detected peak count
+static int run_cfar(){
+    int ret = 0;
+    uint16_t *hwain = (uint16_t*)(hwa_getaddr(gHwaHandle[0]));
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+    uint16_t *dmatrix = &detmatrix[0][0];
+
+    // First move our detmatrix to HWA input
+    // currently it will contain 128 * 32 = 4096 data points 
+    // which coincidentally is the max(+1) for CFARPEAKCNT so assume that limit won't be a problem for now
+    for(int i = 0; i < NUM_DOPPLER_CHIRPS * NUM_RANGEBINS; ++i){
+        *(hwain + i) =   *(dmatrix + i);
     }
 
-    size_t offset = iteration * NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4);
-    for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
-    //    hwain[i] = gSampleBuff[i + offset];
-    }
-    DebugP_log("Running cfar hwa\r\n");
-    HWA_enable(gHwaHandle[0], 1);
-
+    hwa_cfar_init(gHwaHandle[0], &hwa_cfar_cb);
     hwa_run(gHwaHandle[0]);
-
     SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
-    HWA_enable(gHwaHandle[0], 0);
-    // TODO: this needs to work off of CFAR_PEAKCNT
-  //  for(size_t i = 0; i < NUM_RANGEBINS * NUM_RX_ANTENNAS * (CHIRPS_PER_FRAME / 4); ++i){
-  //      gCfarResults[i + offset] = hwaout[i];
-   // }
 
-    //iteration++;
+    // 12 bit register
+    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
+    printf("Detected peaks %d\r\n",ret);
+
+    return ret;
+
 }
 
 static inline void move_doppler_to_hwa(int rbin){
@@ -338,7 +337,9 @@ while(1){
 
        
         run_doppler();
-        run_cfar();
+        int peaks = run_cfar();
+        construct_detlist(peaks);
+        
 
 /*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
