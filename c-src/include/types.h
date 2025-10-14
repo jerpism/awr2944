@@ -11,7 +11,7 @@ typedef struct __attribute__((packed)) {
     int16_t re;
  } int16imre_t;
 
- typedef struct __attribute___((packed)){
+typedef struct __attribute__((packed)) {
     int16_t re;
     int16_t im;
  }int16reim_t;
