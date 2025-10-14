@@ -201,7 +201,6 @@ void hwa_doppler_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
     SemaphoreP_post(&gDopplerDoneSem);
 }
 
-static void construct 
 
 // TODO: this shouldn't and  won't stay here
 // and all of this should be implemented with DMA anyways
@@ -291,6 +290,17 @@ static void run_doppler(){
   
 }
 
+static struct detected_point *construct_detlist(int peaks){
+    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x10000);
+    struct detected_point *points = malloc(sizeof(struct detected_point) * peaks);
+    
+    for(int i = 0; i < peaks; ++i){
+        (points+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
+        (points+i)->doppler = (*(hwaout+i) & 0x00000fff);
+    }
+
+    return points;
+}
 
 static void exec_task(void *args){
     int32_t err;
@@ -338,7 +348,12 @@ while(1){
        
         run_doppler();
         int peaks = run_cfar();
-        construct_detlist(peaks);
+        struct detected_point *points = construct_detlist(peaks);
+        for(int i = 0; i < peaks; ++i){
+            printf("Range %hu, Doppler %hu\r\n",points[i].range, points[i].doppler);
+
+        }
+
         
 
 /*
