@@ -107,6 +107,7 @@ struct detected_point{
     uint16_t doppler;
 };
 
+
 /* == Function Declarations == */
 /* ISRs */
 void btn_isr(void*);
@@ -135,6 +136,7 @@ SemaphoreP_Object gEdmaDoneSem;
 SemaphoreP_Object gCfarDoneSem;
 SemaphoreP_Object gFrameDoneSem;
 SemaphoreP_Object gDopplerDoneSem;
+SemaphoreP_Object gAngleDoneSem;
 
 /* Rest of them */
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
@@ -142,6 +144,7 @@ static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
 int16imre_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
 uint16_t detmatrix[NUM_RANGEBINS][NUM_DOPPLER_CHIRPS];
+uint16_t angledets[NUM_RANGEBINS][NUM_TX_ANTENNAS * NUM_RX_ANTENNAS];
 
 // This can and should really be smaller since if we're detecting literally every single point, something is wrong
 // but for now that can happen so keep this large
@@ -197,8 +200,13 @@ static void frame_done(Edma_IntrHandle handle, void *args){
 
 }
 
+// TODO: combine these at some point no reason to have 2 
 void hwa_doppler_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
     SemaphoreP_post(&gDopplerDoneSem);
+}
+
+void hwa_angle_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
+    SemaphoreP_post(&gAngleDoneSem);
 }
 
 
@@ -229,6 +237,33 @@ static int run_cfar(){
     return ret;
 
 }
+
+
+static int run_anglecfar(int16imre_t *angles, size_t len){
+    int ret = 0;
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
+    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
+
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+
+    for(int i = 0; i < len; ++i){
+        for(int j = 0; j < NUM_TX_ANTENNAS * NUM_RX_ANTENNAS; ++j){
+            *(hwain + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j) = *(angles + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j);
+        }
+    }
+    printf("len is %zu\r\n", len);
+
+    hwa_anglecfar_init(gHwaHandle[0], &hwa_cfar_cb, len);
+    HWA_reset(gHwaHandle[0]);
+    hwa_run(gHwaHandle[0]);
+    SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
+
+    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
+    printf("Peakcnt is %d\r\n",ret);
+
+    return ret;
+}
+
 
 static inline void move_doppler_to_hwa(int rbin){
     int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
@@ -302,6 +337,52 @@ static struct detected_point *construct_detlist(int peaks){
     return points;
 }
 
+
+static int16imre_t *run_anglefft(struct detected_point *points, size_t len){
+    // First run a 2D FFT (doppler) on the detected ranges
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
+    int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
+
+    // This should probably be a statically allocated array instead
+    int16imre_t *angleresults = malloc(len * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t));
+
+    SemaphoreP_constructBinary(&gAngleDoneSem, 0);
+
+
+    // yes this reimplements a lot of the doppler functionality 
+    // but all of this will be replaced with EDMA soon enough hopefully
+    for(int i = 0; i < len; ++i){
+        hwa_doppler_init(gHwaHandle[0], &hwa_doppler_cb);
+
+        move_doppler_to_hwa(points[i].range);
+
+        HWA_reset(gHwaHandle[0]);
+        hwa_run(gHwaHandle[0]);
+
+        SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
+
+        // For now assume that the doppler bin will be 0 since we're measuring stationary objects
+        for(int j = 0; j < NUM_TX_ANTENNAS; ++j){
+            for(int k = 0; k < NUM_RX_ANTENNAS; ++k){
+               *(hwain + (j * k) + k) = *(hwaout + (j * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (k * NUM_DOPPLER_CHIRPS));
+            }
+        }
+
+        hwa_angle_init(gHwaHandle[0], &hwa_angle_cb);
+
+        HWA_reset(gHwaHandle[0]);
+        hwa_run(gHwaHandle[0]);
+        SemaphoreP_pend((&gAngleDoneSem), SystemP_WAIT_FOREVER);
+
+        for(int j = 0; j < NUM_RX_ANTENNAS * NUM_TX_ANTENNAS; ++j){
+            *(angleresults + (i * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS) + j) = *(hwaout + j);
+        }
+    }
+    return angleresults;
+ 
+}
+
+
 static void exec_task(void *args){
     int32_t err;
     while(1){
@@ -330,6 +411,7 @@ while(1){
         // so make sure they are re-enabled at the start of each frame 
         HwiP_enable();
 
+        hwa_init(gHwaHandle[0], &hwa_callback);
         HWA_reset(gHwaHandle[0]);
         HWA_enable(gHwaHandle[0], 1U);
 
@@ -347,14 +429,42 @@ while(1){
 
        
         run_doppler();
+
         int peaks = run_cfar();
         struct detected_point *points = construct_detlist(peaks);
-        for(int i = 0; i < peaks; ++i){
-            printf("Range %hu, Doppler %hu\r\n",points[i].range, points[i].doppler);
 
+        for(int i = 0; i < peaks; ++i){
+            printf("R: %hu\r\n", points[i].range);
         }
 
-        
+        int16imre_t *angles = run_anglefft(points, peaks);
+        uart_dump_samples(angles, 16);
+
+        free(points);
+        free(angles);
+
+        ClockP_usleep(50000);
+        gState = 0;
+        continue;
+
+        while(1)__asm__("wfi");
+        struct detected_point *angledet = NULL;
+
+        int anglepeaks = run_anglecfar(angles, peaks);
+
+        angledet = malloc(anglepeaks * sizeof(struct detected_point));
+        uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
+
+        for(int i = 0; i < anglepeaks; ++i){
+            (angledet+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
+            (angledet+i)->doppler = (*(hwaout+i) & 0x00000fff); //just use the doppler for angle, no point in making another struct for this.
+        }
+
+
+        printf("Angle peaks %d\r\n", anglepeaks);
+        for(int i = 0; i < anglepeaks; ++i){
+            printf("Range %hu, Angle %hu\r\n",angledet[i].range, angledet[i].doppler);
+        }
 
 /*
         DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
@@ -363,6 +473,8 @@ while(1){
 */
 
         while(1)__asm__("wfi");
+        free(angledet);
+
 
 
      
