@@ -12,7 +12,7 @@
 #define CFAR_NUM_NOISE_LEFT     4
 #define CFAR_NUM_NOISE_RIGHT    4
 // Guard cells (pretty self-explanatory)
-#define CFAR_NUM_GUARD_CELLS    0
+#define CFAR_NUM_GUARD_CELLS    1
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
 #define CFAR_AVG_DIV_FACTOR     3
@@ -124,7 +124,7 @@ static HWA_ParamConfig dopplerCfg = {
             .srcAddr = 0,
             .srcAcnt = (NUM_DOPPLER_CHIRPS - 1),
             .srcAIdx = sizeof(int16imre_t),
-            .srcBcnt = (NUM_RX_ANTENNAS * NUM_TX_ANTENNAS),
+            .srcBcnt = (NUM_RX_ANTENNAS * NUM_TX_ANTENNAS) - 1,
             .srcBIdx = NUM_DOPPLER_CHIRPS * sizeof(int16imre_t),
             .srcAcircShift = 0,
             .srcAcircShiftWrap = 0,
@@ -207,7 +207,7 @@ static HWA_ParamConfig cfarCfg = {
         // Data being fed in is log2 magnitude as uint16
         .srcAcnt = NUM_DOPPLER_CHIRPS - 1,
         .srcAIdx = sizeof(uint16_t),
-        .srcBcnt = NUM_RANGEBINS,
+        .srcBcnt = NUM_RANGEBINS -1,
         .srcBIdx = NUM_DOPPLER_CHIRPS * sizeof(uint16_t),
         // These don't seem to get applied during CFAR
         .srcCcnt = 1,
@@ -240,6 +240,134 @@ static HWA_ParamConfig cfarCfg = {
     },
 
 };
+
+
+static HWA_ParamConfig angleCfg = {
+    .triggerMode = HWA_TRIG_MODE_SOFTWARE,
+    .triggerSrc = 0,
+    .accelMode = HWA_ACCELMODE_FFT,
+    .source =
+        {
+            .srcAddr = 0,
+            .srcAcnt = (NUM_RX_ANTENNAS * NUM_TX_ANTENNAS)-1,
+            .srcAIdx = sizeof(int16imre_t),
+            .srcBcnt = 0,
+            .srcBIdx = NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t),
+            .srcAcircShift = 0,
+            .srcAcircShiftWrap = 0,
+            .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
+            .srcRealComplex = HWA_SAMPLES_FORMAT_REAL,
+            .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
+            .srcSign = HWA_SAMPLES_UNSIGNED,
+            .srcConjugate = HWA_FEATURE_BIT_DISABLE,
+            .srcScale = 8,
+            .srcIQSwap = HWA_FEATURE_BIT_DISABLE,
+        },
+    .dest =
+        {
+            .dstAddr = 0x4000,
+            .dstAcnt = NUM_RX_ANTENNAS * NUM_TX_ANTENNAS - 1,
+            .dstAIdx = sizeof(int16imre_t),
+            .dstBIdx = NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t),
+            .dstRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
+            .dstWidth = HWA_SAMPLES_WIDTH_16BIT,
+            .dstSign = HWA_SAMPLES_SIGNED,
+            .dstConjugate = HWA_FEATURE_BIT_DISABLE,
+            .dstScale = 8,
+            .dstSkipInit = 0,
+            .dstIQswap = HWA_FEATURE_BIT_DISABLE,
+        },
+    .accelModeArgs =
+        {
+            .fftMode =
+                {
+                    .fftEn = HWA_FEATURE_BIT_ENABLE,
+                    .fftSize = 4, // size is 2^fftSize
+                    .butterflyScaling = 0,
+                    .fftSize3xEn = HWA_FEATURE_BIT_DISABLE,
+                    .windowEn = HWA_FEATURE_BIT_DISABLE,
+                    .preProcCfg =
+                        {
+                            .dcEstResetMode =
+                                HWA_DCEST_INTERFSUM_RESET_MODE_NOUPDATE,
+                            .dcSubEnable = HWA_FEATURE_BIT_DISABLE,
+                            .interfStat.resetMode =
+                                HWA_DCEST_INTERFSUM_RESET_MODE_NOUPDATE,
+                            .interfLocalize =
+                                {
+                                    .thresholdEnable = HWA_FEATURE_BIT_DISABLE,
+                                },
+                            .interfMitigation =
+                                {
+                                    .enable = HWA_FEATURE_BIT_DISABLE,
+                                },
+                            .complexMultiply.cmultMode =
+                                HWA_COMPLEX_MULTIPLY_MODE_DISABLE,
+                        },
+                },
+        },
+};
+
+static HWA_ParamConfig anglecfarCfg = {
+    .triggerMode = HWA_TRIG_MODE_SOFTWARE,
+    .triggerSrc = 0,
+    .accelMode = HWA_ACCELMODE_CFAR,
+    .accelModeArgs = {
+        .cfarMode = {
+            .numNoiseSamplesLeft = 2,
+            .numNoiseSamplesRight = 2,
+            .numGuardCells = 0,
+            .nAvgDivFactor = 2,
+            .nAvgMode = CFAR_AVG_MODE,
+            .cfarOsKvalue = CFAR_OS_KVALUE,
+            .cfarOsEdgeKScaleEn = CFAR_OS_EDGE_KSCALE_EN,
+            .operMode = HWA_CFAR_OPER_MODE_MAG_INPUT_COMPLEX,
+            .outputMode = CFAR_OUTPUT_MODE,
+            .cfarAdvOutMode = CFAR_ADV_OUT_MODE,
+            .peakGroupEn = CFAR_PEAK_GROUP_EN,
+            .cyclicModeEn = CFAR_CYCLIC_MODE_EN,
+
+        },
+    },
+    .source = {
+        .srcAddr = 0,
+        .srcAcnt = NUM_TX_ANTENNAS * NUM_RX_ANTENNAS - 1,
+        .srcAIdx = sizeof(int16imre_t),
+        .srcBcnt = 0,
+        .srcBIdx = NUM_TX_ANTENNAS * NUM_RX_ANTENNAS * sizeof(int16imre_t),
+        // These don't seem to get applied during CFAR
+        .srcCcnt = 1,
+        .srcCIdx = 0,
+        .srcAcircShift = 0,
+        .srcAcircShiftWrap = 0,
+        .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
+        .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
+        .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
+        .srcSign = HWA_SAMPLES_SIGNED,
+        .srcConjugate = HWA_FEATURE_BIT_DISABLE,
+        .srcScale = 8,
+        .srcIQSwap = HWA_FEATURE_BIT_DISABLE,
+    },
+    .dest = {
+        .dstAddr = 0x1C000,
+        .dstAcnt = NUM_TX_ANTENNAS * NUM_RX_ANTENNAS -1,
+        .dstAIdx = sizeof(uint32_t),
+        .dstBIdx = 0, // ignored in detected peaks mode
+        .dstRealComplex = HWA_SAMPLES_FORMAT_REAL, // For now we just care about detections so suppress Q channel 
+        .dstWidth = HWA_SAMPLES_WIDTH_32BIT, // output is 24 bit so this should be bigger (can maybe get away with 16 using scaling?)
+        .dstSign = HWA_SAMPLES_UNSIGNED,
+        .dstConjugate = HWA_FEATURE_BIT_DISABLE,
+        // Essentially shifts the result 8 bits to the right
+        // so we don't have to do it later when masking
+        // TODO: might need to remove this when we care about Q channel CUT/Noise data
+        .dstScale = 8,  
+        .dstSkipInit = 0,
+        .dstIQswap = HWA_FEATURE_BIT_DISABLE,
+    },
+
+};
+
+
 /* HWA RAM atrributes */
 HWA_RAMAttrs HwaRamCfg[HWA_NUM_RAMS] =
 {
@@ -291,6 +419,24 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
 }
 
 
+void hwa_anglecfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb, size_t ranges){
+    DSSHWACCPARAMRegs *pparam = (DSSHWACCPARAMRegs*)gHwaObjectPtr[0]->hwAttrs->paramBaseAddr;
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+    anglecfarCfg.source.srcBcnt = ranges-1;
+    HWA_configCommon(handle, &HwaCommonConfig[0]);
+    HWA_configParamSet(handle, 0, &anglecfarCfg, NULL);
+    pregs->CFAR_THRESH = 0;
+
+    HWA_InterruptConfig intrcfg;
+    memset(&intrcfg, 0, sizeof(HWA_InterruptConfig));
+    intrcfg.interruptTypeFlag = HWA_PARAMDONE_INTERRUPT_TYPE_CPU_INTR1;
+    intrcfg.cpu.callbackFn = cb;
+    HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
+    HWA_enable(handle, 1);
+    HWA_reset(handle);
+}
+
+
 void hwa_doppler_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCPARAMRegs *pparam = (DSSHWACCPARAMRegs*)gHwaObjectPtr[0]->hwAttrs->paramBaseAddr;
     DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
@@ -301,6 +447,21 @@ void hwa_doppler_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     intrcfg.interruptTypeFlag = HWA_PARAMDONE_INTERRUPT_TYPE_CPU_INTR1;
     intrcfg.cpu.callbackFn = cb;
     HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
+    HWA_enable(handle, 1);
+    HWA_reset(handle);
+}
+
+
+void hwa_angle_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
+    HWA_configCommon(handle, &HwaCommonConfig[0]);
+    HWA_configParamSet(handle,0, &angleCfg, NULL);
+    
+    HWA_InterruptConfig intrcfg;
+    memset(&intrcfg, 0, sizeof(HWA_InterruptConfig));
+    intrcfg.interruptTypeFlag = HWA_PARAMDONE_INTERRUPT_TYPE_CPU_INTR1;
+    intrcfg.cpu.callbackFn = cb;
+    HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
+
     HWA_enable(handle, 1);
     HWA_reset(handle);
 }
