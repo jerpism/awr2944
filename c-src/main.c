@@ -362,9 +362,10 @@ static int16imre_t *run_anglefft(struct detected_point *points, size_t len){
         SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
 
         // For now assume that the doppler bin will be 0 since we're measuring stationary objects
+        // Essentially rearranges [TX][RC][DC] into [DC][TX][RX]
         for(int j = 0; j < NUM_TX_ANTENNAS; ++j){
             for(int k = 0; k < NUM_RX_ANTENNAS; ++k){
-               *(hwain + (j * k) + k) = *(hwaout + (j * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (k * NUM_DOPPLER_CHIRPS));
+               *(hwain + (j * NUM_RX_ANTENNAS) + k) = *(hwaout + (j * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (k * NUM_DOPPLER_CHIRPS));
             }
         }
 
