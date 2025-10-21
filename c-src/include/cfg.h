@@ -20,18 +20,20 @@
 // TODO: get this from a txen bitmask too
 #define NUM_TX_ANTENNAS 4
 
-#define SAMPLE_SIZE         (sizeof(uint16_t))
-#define CHIRP_DATASIZE      (NUM_RX_ANTENNAS * CFG_PROFILE_NUMADCSAMPLES * SAMPLE_SIZE)
 #define CHIRPS_PER_FRAME    128
-#define FRAME_DATASIZE      (CHIRP_DATASIZE * CHIRPS_PER_FRAME)
-#define UDP_BYTES_PER_PKT   1024
-#define UDP_PKT_CNT         (FRAME_DATASIZE / UDP_BYTES_PER_PKT)
-#define NUM_RANGEBINS       (CFG_PROFILE_NUMADCSAMPLES / 2)
 
 // Doppler chirps will always be the total chirps in a frame / enabled rx
 #define NUM_DOPPLER_CHIRPS (CHIRPS_PER_FRAME / NUM_RX_ANTENNAS)
-
+#define NUM_RANGEBINS       (CFG_PROFILE_NUMADCSAMPLES / 2)
 #define CPLX_SAMPLE_SIZE (sizeof(int16_t) * 2)
+
+#define SAMPLE_SIZE         (sizeof(uint16_t))
+#define CHIRP_DATASIZE      (NUM_RX_ANTENNAS * CFG_PROFILE_NUMADCSAMPLES * SAMPLE_SIZE)
+#define FRAME_DATASIZE      (NUM_RANGEBINS * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * NUM_DOPPLER_CHIRPS * sizeof(uint32_t))
+#define UDP_BYTES_PER_PKT   1024
+#define UDP_PKT_CNT         (FRAME_DATASIZE / UDP_BYTES_PER_PKT)
+
+
 
 
 
