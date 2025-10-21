@@ -15,6 +15,11 @@
 static SemaphoreP_Object hwaDoneSem;
 extern HWA_Handle gHwaHandle[1];
 
+struct detected_point{
+    uint16_t range;
+    uint16_t doppler;
+};
+
 static void hwa_cb(uint32_t intrIdx, uint32_t paramSet, void *arg){
     SemaphoreP_post(&hwaDoneSem);
 }
@@ -38,6 +43,7 @@ static inline void sum_doppler_result(detmatrix_t detmatrix, int rbin){
     }
 
 }
+
 
 static void move_doppler_to_hwa(radarcube_t data, int rbin){
     int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
@@ -75,4 +81,68 @@ void dp_run_doppler(radarcube_t data, detmatrix_t out){
         sum_doppler_result(out, i);
     }
   
+}
+
+
+int dp_run_cfar(detmatrix_t detmatrix){
+    int ret = 0;
+    uint16_t *hwain = (uint16_t*)(hwa_getaddr(gHwaHandle[0]));
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+    uint16_t *dmatrix = &detmatrix[0][0];
+
+    // First move our detmatrix to HWA input
+    // currently it will contain 128 * 32 = 4096 data points 
+    // which coincidentally is the max(+1) for CFARPEAKCNT so assume that limit won't be a problem for now
+    for(int i = 0; i < NUM_DOPPLER_CHIRPS * NUM_RANGEBINS; ++i){
+        *(hwain + i) =   *(dmatrix + i);
+    }
+
+    hwa_cfar_init(gHwaHandle[0], &hwa_cb);
+    hwa_run(gHwaHandle[0]);
+    SemaphoreP_pend(&hwaDoneSem, SystemP_WAIT_FOREVER);
+
+    // 12 bit register
+    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
+
+    return ret;
+}
+
+
+void dp_run_anglefft(radarcube_t data, struct detected_point *points, size_t len, int16imre_t *out){
+    // First run a 2D FFT (doppler) on the detected ranges
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
+    int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
+
+
+    // yes this reimplements a lot of the doppler functionality 
+    // but all of this will be replaced with EDMA soon enough hopefully
+    for(int i = 0; i < len; ++i){
+        hwa_doppler_init(gHwaHandle[0], &hwa_cb);
+
+        move_doppler_to_hwa(data, points[i].range);
+
+        HWA_reset(gHwaHandle[0]);
+        hwa_run(gHwaHandle[0]);
+
+        SemaphoreP_pend(&hwaDoneSem, SystemP_WAIT_FOREVER);
+
+        // For now assume that the doppler bin will be 0 since we're measuring stationary objects
+        // Essentially rearranges [TX][RC][DC] into [DC][TX][RX]
+        for(int j = 0; j < NUM_TX_ANTENNAS; ++j){
+            for(int k = 0; k < NUM_RX_ANTENNAS; ++k){
+               *(hwain + (j * NUM_RX_ANTENNAS) + k) = *(hwaout + (j * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (k * NUM_DOPPLER_CHIRPS));
+            }
+        }
+
+        hwa_angle_init(gHwaHandle[0], &hwa_cb);
+
+        HWA_reset(gHwaHandle[0]);
+        hwa_run(gHwaHandle[0]);
+        SemaphoreP_pend(&hwaDoneSem, SystemP_WAIT_FOREVER);
+
+        for(int j = 0; j < NUM_RX_ANTENNAS * NUM_TX_ANTENNAS; ++j){
+            *(out + (i * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS) + j) = *(hwaout + j);
+        }
+    }
+
 }
