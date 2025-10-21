@@ -268,16 +268,14 @@ static int run_anglecfar(int16imre_t *angles, size_t len){
 }
 
 
-static struct detected_point *construct_detlist(int peaks){
+static inline void construct_detlist(int peaks, struct detected_point *out){
     uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x10000);
-    struct detected_point *points = malloc(sizeof(struct detected_point) * peaks);
     
     for(int i = 0; i < peaks; ++i){
-        (points+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
-        (points+i)->doppler = (*(hwaout+i) & 0x00000fff);
+        (out+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
+        (out+i)->doppler = (*(hwaout+i) & 0x00000fff);
     }
 
-    return points;
 }
 
 
@@ -295,7 +293,6 @@ static int16imre_t *run_anglefft(struct detected_point *points, size_t len){
     // yes this reimplements a lot of the doppler functionality 
     // but all of this will be replaced with EDMA soon enough hopefully
     for(int i = 0; i < len; ++i){
-        hwa_doppler_init(gHwaHandle[0], &hwa_doppler_cb);
 
         move_doppler_to_hwa(points[i].range);
 
@@ -373,19 +370,26 @@ while(1){
         MMWave_stop(gMmwHandle, &err);
 
         dp_run_doppler(gSampleBuff, detmatrix);
+        
+        int peaks = dp_run_cfar(detmatrix);
+        printf("Detected peaks %d\r\n", peaks);
 
+        struct detected_point *points = malloc(peaks * sizeof(struct detected_point));
+        construct_detlist(peaks, points);
+
+        for(int i = 0; i < peaks; ++i){
+            printf("R: %hu\r\n", points[i].range);
+        }
+
+        free(points);
 
         ClockP_usleep(50000);
         gState = 0;
         continue;
 
 
-        int peaks = run_cfar();
-        struct detected_point *points = construct_detlist(peaks);
 
-        for(int i = 0; i < peaks; ++i){
-            printf("R: %hu\r\n", points[i].range);
-        }
+
 
         int16imre_t *angles = run_anglefft(points, peaks);
         uart_dump_samples(angles, 16);
