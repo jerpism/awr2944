@@ -69,7 +69,14 @@
 
 extern void uart_dump_samples(void *buff, size_t n);
 
+struct cfarcfg{
+    uint8_t num_noise;
+    uint8_t divfactor;
+    uint32_t threshold;
+};
 
+
+extern void uart_read_cfarcfg(struct cfarcfg *cfarcfg);
 
 /* Task related macros */
 #define EXEC_TASK_PRI   (configMAX_PRIORITIES-1)     // must be higher than INIT_TASK_PRI
@@ -200,10 +207,6 @@ static void frame_done(Edma_IntrHandle handle, void *args){
 
 }
 
-// TODO: combine these at some point no reason to have 2 
-void hwa_doppler_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
-    SemaphoreP_post(&gDopplerDoneSem);
-}
 
 void hwa_angle_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
     SemaphoreP_post(&gAngleDoneSem);
@@ -264,66 +267,6 @@ static int run_anglecfar(int16imre_t *angles, size_t len){
     return ret;
 }
 
-
-static inline void move_doppler_to_hwa(int rbin){
-    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
-    // Copies the data for a given rangebin to the HWA input memory (assuming M0 in this case)
-    // The copied data will be in the form of [TX][RX][DC] which will also be the form for the HWA output.
-    for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
-        for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
-            for(int dc = 0; dc < NUM_DOPPLER_CHIRPS; ++dc){
-                *(hwain + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + dc) = gSampleBuff[tx][dc][rx][rbin];
-            }
-        }
-    }
-}
-
-
-static inline uint16_t log2mag(int16imre_t val){
-    return (uint16_t) (log2(sqrt(SQUARE_I16(val.re) + SQUARE_I16(val.im))));
-}
-
-
-static inline void sum_doppler_result(int rbin){
-    int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
-    // Calculates the sum of log2 magnitudes for the doppler fft output 
-    // and inserts it into the [range][doppler] detection matrix 
-    for(int db = 0; db < NUM_DOPPLER_CHIRPS; ++db){
-        for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
-            for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
-                detmatrix[rbin][db] += log2mag(*(hwaout + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + db));
-            }
-        }
-    }
-
-}
-
-
-static void run_doppler(){
-    SemaphoreP_constructBinary(&gDopplerDoneSem, 0);
-    hwa_doppler_init(gHwaHandle[0], &hwa_doppler_cb);
-
-    for(int i = 0; i < NUM_RANGEBINS; ++i){
-        // TODO: replace all of this with EDMA
-        // First, move the data for a given rangebin to the HWA input and run it
-        // this will change the order to [TX][RX][DC]
-        move_doppler_to_hwa( i);
-        HWA_reset(gHwaHandle[0]);
-
-        hwa_run(gHwaHandle[0]);
-
-        SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
-
-        // Once we have the result in HWA output, calculate a sum of log2 magnitudes across the virtual receivers
-        // and insert it into the [range][doppler] detection matrix
-        // this can then be input to CFAR
-        sum_doppler_result(i);
-    }
-
-        printf("detmatrix address %p\r\n",&detmatrix);
-
-  
-}
 
 static struct detected_point *construct_detlist(int peaks){
     uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x10000);
@@ -406,6 +349,7 @@ static void main_task(void *args){
     HwiP_enable();
 while(1){
     ClockP_usleep(5000);
+
     while(gState){
         // This might be unnecessary but we have encountered situations
         // in which the system ends up locked with interrupts seemingly disabled
@@ -428,8 +372,13 @@ while(1){
 
         MMWave_stop(gMmwHandle, &err);
 
-       
-        run_doppler();
+        dp_run_doppler(gSampleBuff, detmatrix);
+
+
+        ClockP_usleep(50000);
+        gState = 0;
+        continue;
+
 
         int peaks = run_cfar();
         struct detected_point *points = construct_detlist(peaks);
@@ -444,9 +393,6 @@ while(1){
         free(points);
         free(angles);
 
-        ClockP_usleep(50000);
-        gState = 0;
-        continue;
 
         while(1)__asm__("wfi");
         struct detected_point *angledet = NULL;
@@ -476,15 +422,10 @@ while(1){
         while(1)__asm__("wfi");
         free(angledet);
 
-
+    }
 
      
-/*        udp_send_data((void*)&header, 4);
-        for(size_t i = 0; i < UDP_PKT_CNT; ++i){
-            udp_send_data((void*)(gSampleBuff + (i * UDP_BYTES_PER_PKT)), UDP_BYTES_PER_PKT);
-        }
-        udp_send_data((void*)&footer, 4);*/
-    }
+
 }
     while(1)__asm__("wfi");
 
@@ -533,7 +474,7 @@ static void init_task(void *args){
 
 
     DebugP_log("Init network...\r\n");
-//    network_init(NULL);
+  //  network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
