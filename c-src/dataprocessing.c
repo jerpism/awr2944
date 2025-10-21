@@ -108,6 +108,31 @@ int dp_run_cfar(detmatrix_t detmatrix){
 }
 
 
+int dp_run_anglecfar(int16imre_t *angles, size_t len){
+    int ret = 0;
+    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
+    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
+
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+
+    for(int i = 0; i < len; ++i){
+        for(int j = 0; j < NUM_TX_ANTENNAS * NUM_RX_ANTENNAS; ++j){
+            *(hwain + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j) = *(angles + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j);
+        }
+    }
+    printf("len is %zu\r\n", len);
+
+    hwa_anglecfar_init(gHwaHandle[0], &hwa_cb, len);
+    HWA_reset(gHwaHandle[0]);
+    hwa_run(gHwaHandle[0]);
+    SemaphoreP_pend(&hwaDoneSem, SystemP_WAIT_FOREVER);
+
+    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
+
+    return ret;
+}
+
+
 void dp_run_anglefft(radarcube_t data, struct detected_point *points, size_t len, int16imre_t *out){
     // First run a 2D FFT (doppler) on the detected ranges
     int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
