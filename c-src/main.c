@@ -279,51 +279,6 @@ static inline void construct_detlist(int peaks, struct detected_point *out){
 }
 
 
-static int16imre_t *run_anglefft(struct detected_point *points, size_t len){
-    // First run a 2D FFT (doppler) on the detected ranges
-    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
-    int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
-
-    // This should probably be a statically allocated array instead
-    int16imre_t *angleresults = malloc(len * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t));
-
-    SemaphoreP_constructBinary(&gAngleDoneSem, 0);
-
-
-    // yes this reimplements a lot of the doppler functionality 
-    // but all of this will be replaced with EDMA soon enough hopefully
-    for(int i = 0; i < len; ++i){
-
-        move_doppler_to_hwa(points[i].range);
-
-        HWA_reset(gHwaHandle[0]);
-        hwa_run(gHwaHandle[0]);
-
-        SemaphoreP_pend(&gDopplerDoneSem, SystemP_WAIT_FOREVER);
-
-        // For now assume that the doppler bin will be 0 since we're measuring stationary objects
-        // Essentially rearranges [TX][RC][DC] into [DC][TX][RX]
-        for(int j = 0; j < NUM_TX_ANTENNAS; ++j){
-            for(int k = 0; k < NUM_RX_ANTENNAS; ++k){
-               *(hwain + (j * NUM_RX_ANTENNAS) + k) = *(hwaout + (j * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (k * NUM_DOPPLER_CHIRPS));
-            }
-        }
-
-        hwa_angle_init(gHwaHandle[0], &hwa_angle_cb);
-
-        HWA_reset(gHwaHandle[0]);
-        hwa_run(gHwaHandle[0]);
-        SemaphoreP_pend((&gAngleDoneSem), SystemP_WAIT_FOREVER);
-
-        for(int j = 0; j < NUM_RX_ANTENNAS * NUM_TX_ANTENNAS; ++j){
-            *(angleresults + (i * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS) + j) = *(hwaout + j);
-        }
-    }
-    return angleresults;
- 
-}
-
-
 static void exec_task(void *args){
     int32_t err;
     while(1){
@@ -370,7 +325,7 @@ while(1){
         MMWave_stop(gMmwHandle, &err);
 
         dp_run_doppler(gSampleBuff, detmatrix);
-        
+
         int peaks = dp_run_cfar(detmatrix);
         printf("Detected peaks %d\r\n", peaks);
 
@@ -381,50 +336,34 @@ while(1){
             printf("R: %hu\r\n", points[i].range);
         }
 
+        int16imre_t *angles = malloc(peaks * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t));
+
+        dp_run_anglefft(gSampleBuff, points, peaks, angles);
+        peaks = dp_run_anglecfar(angles, peaks);
+        struct detected_point *angledet = malloc(peaks * sizeof(struct detected_point));
+        uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
+
+        for(int i = 0; i < peaks; ++i){
+            (angledet+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
+            (angledet+i)->doppler = (*(hwaout+i) & 0x00000fff); //just use the doppler for angle, no point in making another struct for this.
+        }
+
+
+        printf("Angle peaks %d\r\n", peaks);
+        for(int i = 0; i < peaks; ++i){
+            printf("Range %hu, Angle %hu\r\n",angledet[i].range, angledet[i].doppler);
+        }
+
         free(points);
+        free(angles);
+        free(angledet);
 
         ClockP_usleep(50000);
         gState = 0;
         continue;
 
 
-
-
-
-        int16imre_t *angles = run_anglefft(points, peaks);
-        uart_dump_samples(angles, 16);
-
-        free(points);
-        free(angles);
-
-
         while(1)__asm__("wfi");
-        struct detected_point *angledet = NULL;
-
-        int anglepeaks = run_anglecfar(angles, peaks);
-
-        angledet = malloc(anglepeaks * sizeof(struct detected_point));
-        uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
-
-        for(int i = 0; i < anglepeaks; ++i){
-            (angledet+i)->range = (*(hwaout+i) & 0x00fff000) >> 12U;
-            (angledet+i)->doppler = (*(hwaout+i) & 0x00000fff); //just use the doppler for angle, no point in making another struct for this.
-        }
-
-
-        printf("Angle peaks %d\r\n", anglepeaks);
-        for(int i = 0; i < anglepeaks; ++i){
-            printf("Range %hu, Angle %hu\r\n",angledet[i].range, angledet[i].doppler);
-        }
-
-/*
-        DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
-        uint16_t peakcnt = pregs->CFAR_PEAKCNT & 0x00000fff;
-        printf("%hu\r\n",peakcnt);
-*/
-
-        while(1)__asm__("wfi");
-        free(angledet);
 
     }
 
