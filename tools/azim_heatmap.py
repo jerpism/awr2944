@@ -24,8 +24,13 @@ for ts, pkt in dpkt.pcapng.Reader(open(filename,'rb')):
 
     ip=eth.data
 
-    if (ip.p==dpkt.ip.IP_PROTO_UDP and ip.p!=dpkt.ip.IP_PROTO_DDP):
-        payload = ip.data.data
+    if ip.p==dpkt.ip.IP_PROTO_UDP:
+        udp = ip.data
+        # Skip DHCP (BOOTP) packets
+        if (udp.sport in (67, 68) or udp.dport in (67, 68)):
+            continue
+
+        payload = udp.data
         if (payload != header and payload != footer and payload != 0):
             pktbuf.append(payload)
 
