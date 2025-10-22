@@ -286,19 +286,19 @@ static void exec_task(void *args){
     }
 }
 
+static inline void send_radarcube(){
+    uint8_t header[] = {1,2,3,4};
+    uint8_t footer[] = {4,3,2,1};
+    udp_send_data((void*)&header, 4);
+    for(size_t i = 0; i < UDP_PKT_CNT; ++i){
+        udp_send_data((void*)(((uint8_t*)gSampleBuff) + i * UDP_BYTES_PER_PKT), UDP_BYTES_PER_PKT);
+    }
+    udp_send_data((void*)&footer, 4);
+}
 
 static void main_task(void *args){
     int32_t err = 0;
-    int32_t ret = 0;
-    uint8_t header[] = {1,2,3,4};
-    uint8_t footer[] = {4,3,2,1};
-    static bool firstrun = 1;
-    int16_t tmp = 0;
 
-    // TODO: grab this from sysconfig somehow but for now assume bank 2 will be output
-    void *hwaout = (void*)(hwa_getaddr(gHwaHandle[0])+0x4000);
-
-    HwiP_enable();
 while(1){
     ClockP_usleep(5000);
 
@@ -323,6 +323,10 @@ while(1){
         SemaphoreP_pend(&gFrameDoneSem, 500);
 
         MMWave_stop(gMmwHandle, &err);
+
+        send_radarcube();
+        gState = 0;
+        continue;
 
         dp_run_doppler(gSampleBuff, detmatrix);
 
