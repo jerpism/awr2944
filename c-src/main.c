@@ -208,66 +208,6 @@ static void frame_done(Edma_IntrHandle handle, void *args){
 }
 
 
-void hwa_angle_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
-    SemaphoreP_post(&gAngleDoneSem);
-}
-
-
-// TODO: this shouldn't and  won't stay here
-// and all of this should be implemented with DMA anyways
-// returns detected peak count
-static int run_cfar(){
-    int ret = 0;
-    uint16_t *hwain = (uint16_t*)(hwa_getaddr(gHwaHandle[0]));
-    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
-    uint16_t *dmatrix = &detmatrix[0][0];
-
-    // First move our detmatrix to HWA input
-    // currently it will contain 128 * 32 = 4096 data points 
-    // which coincidentally is the max(+1) for CFARPEAKCNT so assume that limit won't be a problem for now
-    for(int i = 0; i < NUM_DOPPLER_CHIRPS * NUM_RANGEBINS; ++i){
-        *(hwain + i) =   *(dmatrix + i);
-    }
-
-    hwa_cfar_init(gHwaHandle[0], &hwa_cfar_cb);
-    hwa_run(gHwaHandle[0]);
-    SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
-
-    // 12 bit register
-    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
-    printf("Detected peaks %d\r\n",ret);
-
-    return ret;
-
-}
-
-
-static int run_anglecfar(int16imre_t *angles, size_t len){
-    int ret = 0;
-    int16imre_t *hwain = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]));
-    uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x1c000);
-
-    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
-
-    for(int i = 0; i < len; ++i){
-        for(int j = 0; j < NUM_TX_ANTENNAS * NUM_RX_ANTENNAS; ++j){
-            *(hwain + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j) = *(angles + (i * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS) + j);
-        }
-    }
-    printf("len is %zu\r\n", len);
-
-    hwa_anglecfar_init(gHwaHandle[0], &hwa_cfar_cb, len);
-    HWA_reset(gHwaHandle[0]);
-    hwa_run(gHwaHandle[0]);
-    SemaphoreP_pend(&gCfarDoneSem, SystemP_WAIT_FOREVER);
-
-    ret = pregs->CFAR_PEAKCNT & 0x00000fff;
-    printf("Peakcnt is %d\r\n",ret);
-
-    return ret;
-}
-
-
 static inline void construct_detlist(int peaks, struct detected_point *out){
     uint32_t *hwaout = (uint32_t*)(hwa_getaddr(gHwaHandle[0]) + 0x10000);
     
@@ -421,7 +361,7 @@ static void init_task(void *args){
 
 
     DebugP_log("Init network...\r\n");
-  //  network_init(NULL);
+    network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
