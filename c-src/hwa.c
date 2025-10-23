@@ -4,18 +4,19 @@
 #include <drivers/hwa.h>
 #include "ti_drivers_config.h"
 #include <cfg.h>
+#include <hwa.h>
 #include <types.h>
 
 // TODO: these are here just temporarily to easily tune CFAR and they should be moved to cfg.h or something
 // How many cells to use for noise averaging for CUT
 // actual value used is val * 2
-#define CFAR_NUM_NOISE_LEFT     4
-#define CFAR_NUM_NOISE_RIGHT    4
+#define CFAR_NUM_NOISE_LEFT     2
+#define CFAR_NUM_NOISE_RIGHT    2
 // Guard cells (pretty self-explanatory)
 #define CFAR_NUM_GUARD_CELLS    1
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
-#define CFAR_AVG_DIV_FACTOR     3
+#define CFAR_AVG_DIV_FACTOR     2
 
 #define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
 
@@ -382,6 +383,9 @@ uint32_t hwa_getaddr(HWA_Handle handle){
     return meminfo.baseAddress;
 }
 
+void hwa_cfg_cfar(HWA_Handle handle, struct cfar_cfg cfg){
+    
+}
 
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_configCommon(handle, &HwaCommonConfig[0]);
