@@ -241,6 +241,8 @@ static void main_task(void *args){
 
 while(1){
     ClockP_usleep(5000);
+    cli_main();
+    continue;
 
     while(gState){
         // This might be unnecessary but we have encountered situations
@@ -361,7 +363,7 @@ static void init_task(void *args){
 
 
     DebugP_log("Init network...\r\n");
-    network_init(NULL);
+    //network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
