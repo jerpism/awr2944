@@ -76,8 +76,6 @@ struct cfarcfg{
 };
 
 
-extern void uart_read_cfarcfg(struct cfarcfg *cfarcfg);
-
 /* Task related macros */
 #define EXEC_TASK_PRI   (configMAX_PRIORITIES-1)     // must be higher than INIT_TASK_PRI
 #define MAIN_TASK_PRI   (configMAX_PRIORITIES-3)
@@ -191,7 +189,6 @@ void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
         ++next;
     }
 }
-
 
 
 static void frame_done(Edma_IntrHandle handle, void *args){
