@@ -179,16 +179,11 @@ void hwa_cfar_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
 }
 
 
-static volatile int chcounter = 0;
 void hwa_callback(uint32_t intrIdx, uint32_t paramSet, void *arg){
     static volatile int next = 3;
     HWA_reset(gHwaHandle[0]);
-    if(next == 6){
-        chcounter++;
-    }
+
     EDMA_setEvtRegion(EDMA_getBaseAddr(gEdmaHandle[0]), 0, next);
-
-
 
     if(next + 1 > 6){
         next = 3;
