@@ -79,10 +79,11 @@ struct cfarcfg{
 /* Task related macros */
 #define EXEC_TASK_PRI   (configMAX_PRIORITIES-1)     // must be higher than INIT_TASK_PRI
 #define MAIN_TASK_PRI   (configMAX_PRIORITIES-3)
+#define CLI_TASK_PRI    (configMAX_PRIORITIES-30)
 #define INIT_TASK_PRI   (configMAX_PRIORITIES-2)
 #define EXEC_TASK_SIZE  (4096U/sizeof(configSTACK_DEPTH_TYPE))
 #define MAIN_TASK_SIZE  (4096U/sizeof(configSTACK_DEPTH_TYPE))
-#define DPC_TASK_SIZE   (4096U/sizeof(configSTACK_DEPTH_TYPE))
+#define CLI_TASK_SIZE   (4096U/sizeof(configSTACK_DEPTH_TYPE))
 #define INIT_TASK_SIZE  (4096U/sizeof(configSTACK_DEPTH_TYPE))
 
 
@@ -90,17 +91,17 @@ struct cfarcfg{
 StackType_t gInitTaskStack[INIT_TASK_SIZE] __attribute__((aligned(32)));
 StackType_t gMainTaskStack[MAIN_TASK_SIZE] __attribute__((aligned(32)));
 StackType_t gExecTaskStack[EXEC_TASK_SIZE] __attribute__((aligned(32)));
-StackType_t gDpcTaskStack[DPC_TASK_SIZE] __attribute__((aligned(32)));
+StackType_t gCliTaskStack[CLI_TASK_SIZE] __attribute__((aligned(32)));
 
 StaticTask_t gInitTaskObj;
 StaticTask_t gMainTaskObj;
 StaticTask_t gExecTaskObj;
-StaticTask_t gDpcTaskObj;
+StaticTask_t gCliTaskObj;
 
 TaskHandle_t gInitTask;
 TaskHandle_t gMainTask;
 TaskHandle_t gExecTask;
-TaskHandle_t gDpcTask;
+TaskHandle_t gCliTask;
 
 HWA_Handle gHwaHandle[1];
 
@@ -122,6 +123,7 @@ void chirp_isr(void*);
 static void init_task(void*);
 static void exec_task(void*);
 static void main_task(void*);
+static void cli_task(void*);
 
 /* Other functions */
 static inline void fail(void);
@@ -145,6 +147,7 @@ SemaphoreP_Object gAngleDoneSem;
 
 /* Rest of them */
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
+volatile bool gSingleShot = 0;
 static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 
 int16imre_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
@@ -218,6 +221,13 @@ static void exec_task(void *args){
     }
 }
 
+static void cli_task(void *args){
+    while(1){
+     cli_main();
+     TaskP_yield();
+    }
+}
+
 static inline void send_radarcube(){
     uint8_t header[] = {1,2,3,4};
     uint8_t footer[] = {4,3,2,1};
@@ -228,13 +238,26 @@ static inline void send_radarcube(){
     udp_send_data((void*)&footer, 4);
 }
 
+
+void sensor_start(void){
+    gSingleShot = 0;
+    gState = 1;
+}
+
+void sensor_stop(void){
+    gState = 0;
+}
+
+void single_shot(void){
+    gSingleShot = 1;
+    gState = 1;
+}
+
 static void main_task(void *args){
     int32_t err = 0;
 
 while(1){
     ClockP_usleep(5000);
-    cli_main();
-    continue;
 
     while(gState){
         // This might be unnecessary but we have encountered situations
@@ -259,7 +282,11 @@ while(1){
         MMWave_stop(gMmwHandle, &err);
 
         send_radarcube();
-        gState = 0;
+        ClockP_usleep(5000);
+
+        if(gSingleShot){
+            gState = 0;
+        }
         continue;
 
         dp_run_doppler(gSampleBuff, detmatrix);
@@ -355,7 +382,7 @@ static void init_task(void *args){
 
 
     DebugP_log("Init network...\r\n");
-    //network_init(NULL);
+    network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
@@ -470,6 +497,7 @@ static void init_task(void *args){
 
     DebugP_log("Configured!\r\n");
 
+    cli_init();
 
     DebugP_log("Creating main task...\r\n");
     gMainTask = xTaskCreateStatic(
@@ -483,6 +511,19 @@ static void init_task(void *args){
                             configMAX_PRIORITIES-1 is highest */
         gMainTaskStack, /*  pointer to stack base */
         &gMainTaskObj); /*  pointer to statically allocated task object memory */
+    configASSERT(gMainTask != NULL);
+    DebugP_log("Done\r\n");
+
+    DebugP_log("Creating cli task...\r\n");
+
+    gCliTask = xTaskCreateStatic(
+        cli_task,      
+        "cli task",    
+        CLI_TASK_SIZE, 
+        NULL,           
+        CLI_TASK_PRI, 
+        gCliTaskStack, 
+        &gCliTaskObj);
     configASSERT(gMainTask != NULL);
 
     DebugP_log("Done. バイバイ\r\n");
