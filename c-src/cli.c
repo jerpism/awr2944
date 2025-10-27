@@ -10,7 +10,14 @@
 #include "ti_drivers_open_close.h"
 
 #define MAX_ARGS 32
-#define CMD_CNT 1
+#define CMD_CNT 4
+
+extern HWA_Handle gHwaHandle[1];
+
+// Implemented in main.c 
+extern void sensor_start(void);
+extern void sensor_stop(void);
+extern void single_shot(void);
 
 struct command {
     char *cmd;
@@ -67,11 +74,25 @@ static void cfarCfg(int argc, char *argv[]){
 
     }
 
+    hwa_cfg_cfar(gHwaHandle[0], cfg);
+
     DebugP_log("Args provided\r\n");
     for(int i = 0; i < argc - 1; ++i){
         DebugP_log("%d\r\n",args[i]);
     }
 
+}
+
+static void start(int argc, char *argv[]){
+    sensor_start();
+}
+
+static void stop(int argc, char *argv[]){
+    sensor_stop();
+}
+
+static void single(int argc, char *argv[]){
+    single_shot();
 }
 
 static inline void init_commands(void){
@@ -81,7 +102,17 @@ static inline void init_commands(void){
     cmd_table[i].fp = &cfarCfg;
     ++i;
 
+    cmd_table[i].cmd = "start";
+    cmd_table[i].fp = &start;
+    ++i;
 
+    cmd_table[i].cmd = "stop";
+    cmd_table[i].fp = &stop;
+    ++i;
+
+    cmd_table[i].cmd = "single";
+    cmd_table[i].fp = &single;
+    ++i;
 }
 
 
@@ -130,6 +161,22 @@ static inline void send_backspace(void){
 
 }
 
+void send_prompt(void){
+    const char *prompt = "$ ";
+    UART_Transaction trans = {
+        .buf = prompt,
+        .count = 2,
+        .args = NULL,
+        .timeout = SystemP_WAIT_FOREVER,
+        .status = UART_TRANSFER_STATUS_SUCCESS
+    };
+    UART_write( gUartHandle[0], &trans);
+    
+}
+
+void cli_init(void){
+    init_commands();
+}
 
 void cli_main(){
     int argc = 0;
@@ -138,7 +185,6 @@ void cli_main(){
     char c;
     int count = 0;
 
-    init_commands();
 
     UART_Transaction trans;
     UART_Transaction_init(&trans);
@@ -146,6 +192,7 @@ void cli_main(){
     trans.buf = &c;
 
     memset(buff, 0, sizeof(buff));
+    send_prompt();
 
     while(1){
         UART_read( gUartHandle[0], &trans);
