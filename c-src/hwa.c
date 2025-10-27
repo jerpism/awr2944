@@ -383,9 +383,43 @@ uint32_t hwa_getaddr(HWA_Handle handle){
     return meminfo.baseAddress;
 }
 
+
 void hwa_cfg_cfar(HWA_Handle handle, struct cfar_cfg cfg){
-    
+    DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
+
+    // TODO: This isn't very pretty and really I should just pass in an array 
+    // and figure it out from that but already did it this way.
+    // This also needs a *LOT* more error checking depending on the mode set and so on
+    // but for now simply don't pass in invalid arguments
+    if(cfg.num_noise_l != -1 && cfg.num_noise_l < 64 && cfg.num_noise_l != 1){
+        cfarCfg.accelModeArgs.cfarMode.numNoiseSamplesLeft = cfg.num_noise_l;
+    }
+
+    if(cfg.num_noise_r != -1 && cfg.num_noise_r < 64 && cfg.num_noise_r != 1){
+        cfarCfg.accelModeArgs.cfarMode.numNoiseSamplesRight = cfg.num_noise_r;
+    }
+
+    // is the guard number actually limited to 0-63 as well?
+    if(cfg.num_guard != -1 && cfg.num_guard < 64){
+        cfarCfg.accelModeArgs.cfarMode.numGuardCells = cfg.num_guard;
+    }
+
+    // I'm pretty sure this might have had a limit of 7 but can't find it now
+    if(cfg.avg_div_fact != -1 && cfg.avg_div_fact < 16){
+        cfarCfg.accelModeArgs.cfarMode.nAvgDivFactor = cfg.avg_div_fact;
+    }
+
+    // Assume we're going to be operating in log mode for now
+    // and if a too large value is input just truncate it to 7 bits
+    if(cfg.thresh_divd != -1){
+        pregs->CFAR_THRESH = ((cfg.thresh_divd & 0x7F) << 7U);
+    }
+
+    if(cfg.thresh_divs != -1){
+        pregs->CFAR_THRESH |= cfg.thresh_divs & 0x7FF;
+    }
 }
+
 
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_configCommon(handle, &HwaCommonConfig[0]);
@@ -406,10 +440,8 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
-    pregs->CFAR_THRESH = CFAR_THRESHOLD;
 
-   // int32_t ret = HWA_configCFARThresholdScale(CFAR_THRESHOLD);
-    //DebugP_log("cfar threshold: %d\r\n",ret);
+
     HWA_InterruptConfig intrcfg;
     memset(&intrcfg, 0, sizeof(HWA_InterruptConfig));
     intrcfg.interruptTypeFlag = HWA_PARAMDONE_INTERRUPT_TYPE_CPU_INTR1;
@@ -417,9 +449,6 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_enableParamSetInterrupt(handle, 0, &intrcfg);
     HWA_enable(handle, 1);
     HWA_reset(handle);
-//    HWA_enable(handle, 1);
-//    HWA_reset(handle);
-//    HWA_setSoftwareTrigger(handle, HWA_TRIG_MODE_SOFTWARE);
 }
 
 
