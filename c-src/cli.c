@@ -30,12 +30,43 @@ static void cfarCfg(int argc, char *argv[]){
         args[i-1] = strtol(argv[i], NULL, 10);
     }
 
-    cfg.num_noise_l     = args[0];
-    cfg.num_noise_r     = args[1];
-    cfg.num_guard       = args[2];
-    cfg.avg_div_fact    = args[3];
-    cfg.thresh_divd     = args[4];
-    cfg.thresh_divs     = args[5];
+
+    // There's probably a better way to do this but initialize everything to -1 first
+    // so we can check what arguments were actually provided 
+    cfg.num_noise_l = -1;
+    cfg.num_noise_r = -1;
+    cfg.num_guard = -1;
+    cfg.avg_div_fact = -1;
+    cfg.thresh_divd = -1;
+    cfg.thresh_divs = -1;
+
+
+    // Again we don't care about the name of the command here
+    switch(argc - 1){
+        case 6:
+        cfg.thresh_divs = args[5];
+
+        case 5:
+        cfg.thresh_divd = args[4];
+
+        case 4:
+        cfg.avg_div_fact = args[3];
+
+        case 3:
+        cfg.num_guard = args[2];
+
+        case 2:
+        cfg.num_noise_r = args[1];
+
+        case 1:
+        cfg.num_noise_l = args[0];
+
+        default:
+        break;
+
+
+    }
+
     DebugP_log("Args provided\r\n");
     for(int i = 0; i < argc - 1; ++i){
         DebugP_log("%d\r\n",args[i]);
@@ -66,6 +97,39 @@ static int parse_cmd(char *cmd, char **out){
     return argc;
 }
 
+// These 2 could be combined into a single function maybe
+static inline void send_crlf(void){
+    const char *str = "\r\n";
+    // Do the same as UART_Transaction_init
+    // sans the buffer and count of course
+    const UART_Transaction trans = {
+        .buf = str,
+        .count = 3,
+        .args = NULL,
+        .timeout = SystemP_WAIT_FOREVER,
+        .status = UART_TRANSFER_STATUS_SUCCESS
+    };
+
+    UART_write(gUartHandle[0], &trans);
+}
+
+
+static inline void send_backspace(void){
+    const char *str = "\b \b";
+    // Do the same as UART_Transaction_init
+    // sans the buffer and count of course
+    const UART_Transaction trans = {
+        .buf = str,
+        .count = 3,
+        .args = NULL,
+        .timeout = SystemP_WAIT_FOREVER,
+        .status = UART_TRANSFER_STATUS_SUCCESS
+    };
+
+    UART_write(gUartHandle[0], &trans);
+
+}
+
 
 void cli_main(){
     int argc = 0;
@@ -81,32 +145,28 @@ void cli_main(){
     trans.count = 1;
     trans.buf = &c;
 
-    // TODO: might improve this with separate functions for special functionality as this is clumsy right now
-    // but whatever, backspace works 
+    memset(buff, 0, sizeof(buff));
+
     while(1){
         UART_read( gUartHandle[0], &trans);
 
         if(count > 126){ break;}
 
-        // Screen sends DEL so check for that too
-        if(c == '\b' || c == 0x7F){
-            if(count > 0){ --count; }
+        switch(c){
+            case '\b':
+            case 0x7F: // DEL
+                if(count > 0){ --count; }
+                send_backspace();
+                continue;
+            break;
 
-            c = '\b';
-            UART_write(gUartHandle[0], &trans);
-            c = ' ';
-            UART_write(gUartHandle[0], &trans);
-            c = '\b';
-            UART_write(gUartHandle[0], &trans);
-            continue;
-        }
+            case '\r':
+            case '\n':
+                send_crlf();
+                goto exit;
+            break;
 
-        if(c == '\r' || c == '\n'){
-            c = '\r';
-            UART_write(gUartHandle[0], &trans);
-            c = '\n';
-            UART_write(gUartHandle[0], &trans);
-
+            default:
             break;
         }
 
@@ -114,9 +174,11 @@ void cli_main(){
         UART_write(gUartHandle[0], &trans);
 
     }
+
+exit:
     
     buff[count+1] = 0;
-
+    count = 0;
     argc = parse_cmd(buff, argv);
 
     for(int i = 0; i < CMD_CNT; ++i){
