@@ -137,13 +137,7 @@ MMWave_Handle gMmwHandle = NULL;
 ADCBuf_Handle gADCBufHandle = NULL;
 MMWave_ProfileHandle gMmwProfiles[MMWAVE_MAX_PROFILE];
 
-SemaphoreP_Object gAdcSampledSem;
-SemaphoreP_Object gBtnPressedSem;
-SemaphoreP_Object gEdmaDoneSem;
-SemaphoreP_Object gCfarDoneSem;
 SemaphoreP_Object gFrameDoneSem;
-SemaphoreP_Object gDopplerDoneSem;
-SemaphoreP_Object gAngleDoneSem;
 
 /* Rest of them */
 volatile bool gState = 0; /* Tracks the current (intended) state of the RSS */
@@ -153,10 +147,6 @@ static uint32_t gPushButtonBaseAddr = GPIO_PUSH_BUTTON_BASE_ADDR;
 int16imre_t gSampleBuff[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS] __attribute__((section(".bss.dss_l3")));
 uint16_t detmatrix[NUM_RANGEBINS][NUM_DOPPLER_CHIRPS];
 uint16_t angledets[NUM_RANGEBINS][NUM_TX_ANTENNAS * NUM_RX_ANTENNAS];
-
-// This can and should really be smaller since if we're detecting literally every single point, something is wrong
-// but for now that can happen so keep this large
-uint32_t gCfarResults[NUM_RANGEBINS * CHIRPS_PER_FRAME * NUM_RX_ANTENNAS] __attribute__((section(".bss.dss_l32")));
 
 
 
@@ -171,12 +161,6 @@ void edma_callback(Edma_IntrHandle handle, void *args){
    // printf("Edma cb\r\n");
     hwa_run(gHwaHandle[0]);
    // HWA_setDMA2ACCManualTrig(gHwaHandle[0], 0);
-}
-
-
-// TODO: combine these 2 cbs to one and use arguments instead
-void hwa_cfar_cb(uint32_t intrIdx, uint32_t paramSet, void * arg){
-    SemaphoreP_post(&gCfarDoneSem);
 }
 
 
@@ -375,12 +359,6 @@ static void init_task(void *args){
     DebugP_log("HWA address is %#x\r\n",hwaaddr);
     DebugP_log("Done.\r\n");
 
-  //  hwa_cfar_init(gHwaHandle[0], hwa_cfar_cb);
-
-    ret = SemaphoreP_constructBinary(&gCfarDoneSem, 0);
-    DebugP_assert(ret == 0);
-
-
     DebugP_log("Init network...\r\n");
     network_init(NULL);
     DebugP_log("Done.\r\n");
@@ -431,9 +409,6 @@ static void init_task(void *args){
 
     // Push button interrupt
     gPushButtonBaseAddr = gpio_init(&btn_isr);
-
-    ret = SemaphoreP_constructBinary(&gBtnPressedSem, 0);
-    DebugP_assert(ret == 0);
 
     ret = SemaphoreP_constructBinary(&gFrameDoneSem, 0);
     DebugP_assert(ret == 0);
@@ -539,7 +514,6 @@ void btn_isr(void *arg){
     pending = GPIO_getHighLowLevelPendingInterrupt(gPushButtonBaseAddr, pin);
     GPIO_clearInterrupt(GPIO_PUSH_BUTTON_BASE_ADDR, pin);
     if(pending){
-        //SemaphoreP_post(&gBtnPressedSem);
         printf("Button\r\n");
         gState = !gState;
     }    
