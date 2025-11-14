@@ -416,13 +416,22 @@ void hwa_cfg_cfar(HWA_Handle handle, struct cfar_cfg cfg){
     if(cfg.avg_div_fact != -1 && cfg.avg_div_fact < 16){
         cfarCfg.accelModeArgs.cfarMode.nAvgDivFactor = cfg.avg_div_fact;
     }
+
+    // Assume we're going to be operating in log mode for now
+    // and if a too large value is input just truncate it to 7 bits
+    if(cfg.thresh_divd != -1){
+        pregs->CFAR_THRESH = ((cfg.thresh_divd & 0x7F) << 7U);
+    }
+
+    if(cfg.thresh_divs != -1){
+        pregs->CFAR_THRESH |= cfg.thresh_divs & 0x7FF;
+    }
 }
 
 
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &rangeCfg, NULL);
-    pregs->CFAR_THRESH = CFAR_THRESHOLD;
 
     HWA_InterruptConfig intrcfg;
     memset(&intrcfg, 0, sizeof(HWA_InterruptConfig));
@@ -439,6 +448,7 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
+    pregs->CFAR_THRESH = CFAR_THRESHOLD
 
 
     HWA_InterruptConfig intrcfg;
