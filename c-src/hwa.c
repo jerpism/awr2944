@@ -448,7 +448,7 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
-    pregs->CFAR_THRESH = CFAR_THRESHOLD
+    pregs->CFAR_THRESH = CFAR_THRESHOLD;
 
 
     HWA_InterruptConfig intrcfg;
