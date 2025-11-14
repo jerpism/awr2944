@@ -13,10 +13,15 @@
 #define CFAR_NUM_NOISE_LEFT     2
 #define CFAR_NUM_NOISE_RIGHT    2
 // Guard cells (pretty self-explanatory)
-#define CFAR_NUM_GUARD_CELLS    1
+#define CFAR_NUM_GUARD_CELLS    2
+
+#define CFAR_SRCACNT (  (NUM_DOPPLER_CHIRPS - 1) +                         \
+                        (CFAR_NUM_NOISE_LEFT * 2 + CFAR_NUM_GUARD_CELLS) + \
+                        (CFAR_NUM_NOISE_RIGHT * 2 + CFAR_NUM_GUARD_CELLS) )
+#define CFAR_CIRCSHIFT (NUM_DOPPLER_CHIRPS - CFAR_NUM_NOISE_LEFT * 2 + CFAR_NUM_GUARD_CELLS)
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
-#define CFAR_AVG_DIV_FACTOR     2
+#define CFAR_AVG_DIV_FACTOR     3
 
 #define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
 
@@ -141,11 +146,11 @@ static HWA_ParamConfig dopplerCfg = {
         {
             .dstAddr = 0x4000,
             .dstAcnt = NUM_DOPPLER_CHIRPS * NUM_TX_ANTENNAS * NUM_RX_ANTENNAS - 1,
-            .dstAIdx = sizeof(int16imre_t),
-            .dstBIdx = NUM_DOPPLER_CHIRPS * sizeof(int16imre_t),
-            .dstRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
+            .dstAIdx = sizeof(uint16_t),//sizeof(int16imre_t),
+            .dstBIdx = NUM_DOPPLER_CHIRPS *sizeof(uint16_t), //sizeof(int16imre_t),
+            .dstRealComplex = HWA_SAMPLES_FORMAT_REAL,
             .dstWidth = HWA_SAMPLES_WIDTH_16BIT,
-            .dstSign = HWA_SAMPLES_SIGNED,
+            .dstSign = HWA_SAMPLES_UNSIGNED,
             .dstConjugate = HWA_FEATURE_BIT_DISABLE,
             .dstScale = 8,
             .dstSkipInit = 0,
@@ -178,6 +183,9 @@ static HWA_ParamConfig dopplerCfg = {
                             .complexMultiply.cmultMode =
                                 HWA_COMPLEX_MULTIPLY_MODE_DISABLE,
                         },
+                    .postProcCfg = {
+                        .magLogEn = HWA_FFT_MODE_MAGNITUDE_LOG2_ENABLED,
+                    },
                 },
         },
 };
@@ -206,15 +214,15 @@ static HWA_ParamConfig cfarCfg = {
     .source = {
         .srcAddr = 0,
         // Data being fed in is log2 magnitude as uint16
-        .srcAcnt = NUM_DOPPLER_CHIRPS - 1,
+        .srcAcnt = CFAR_SRCACNT,
         .srcAIdx = sizeof(uint16_t),
         .srcBcnt = NUM_RANGEBINS -1,
         .srcBIdx = NUM_DOPPLER_CHIRPS * sizeof(uint16_t),
         // These don't seem to get applied during CFAR
         .srcCcnt = 1,
         .srcCIdx = 0,
-        .srcAcircShift = 0,
-        .srcAcircShiftWrap = 0,
+        .srcAcircShift = CFAR_CIRCSHIFT,
+        .srcAcircShiftWrap = 5,
         .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
         .srcRealComplex = HWA_SAMPLES_FORMAT_REAL,
         .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
