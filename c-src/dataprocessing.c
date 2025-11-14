@@ -30,7 +30,8 @@ static inline uint16_t log2mag(int16imre_t val){
 }
 
 
-static inline void sum_doppler_result(detmatrix_t detmatrix, int rbin){
+// Use this when HWA is not doing the log2 post processing
+static inline void sum_doppler_result_log2(detmatrix_t detmatrix, int rbin){
     int16imre_t *hwaout = (int16imre_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
     // Calculates the sum of log2 magnitudes for the doppler fft output 
     // and inserts it into the [range][doppler] detection matrix 
@@ -38,6 +39,21 @@ static inline void sum_doppler_result(detmatrix_t detmatrix, int rbin){
         for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
             for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
                 detmatrix[rbin][db] += log2mag(*(hwaout + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + db));
+            }
+        }
+    }
+
+}
+
+
+// Use this when HWA has done the log2 postprocessing
+// Should be in Q11 assuming the manual isn't lying
+static inline void sum_doppler_result(detmatrix_t detmatrix, int rbin){
+    uint16_t *hwaout = (uint16_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
+    for(int db = 0; db < NUM_DOPPLER_CHIRPS; ++db){
+        for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
+            for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
+                detmatrix[rbin][db] += *(hwaout + (tx * NUM_RX_ANTENNAS * NUM_DOPPLER_CHIRPS) + (rx * NUM_DOPPLER_CHIRPS) + db);
             }
         }
     }
