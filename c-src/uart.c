@@ -7,6 +7,7 @@
 #include "ti_drivers_config.h"
 #include "ti_drivers_open_close.h"
 
+
 // Writes out samples in a CSV format to the serial console
 // buff should point to memory location (Typically HWA output register in this case)
 // n    - number of samples 

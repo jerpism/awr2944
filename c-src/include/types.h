@@ -20,4 +20,9 @@ typedef struct __attribute__((packed)) {
  typedef int16imre_t radarcube_t[NUM_TX_ANTENNAS][NUM_DOPPLER_CHIRPS][NUM_RX_ANTENNAS][NUM_RANGEBINS];
  typedef uint16_t detmatrix_t[NUM_RANGEBINS][NUM_DOPPLER_CHIRPS];
 
+ struct detected_point{
+    uint16_t range;
+    uint16_t doppler;
+};
+
 #endif /* TYPES_H */

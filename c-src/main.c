@@ -102,11 +102,6 @@ HWA_Handle gHwaHandle[1];
 #define GET_SAMPLE_IDX(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
 #define SQUARE_I16(x) (((int32_t)x) * ((int32_t)x))
 
-struct detected_point{
-    uint16_t range;
-    uint16_t doppler;
-};
-
 
 /* == Function Declarations == */
 /* ISRs */
