@@ -50,6 +50,7 @@ static inline void sum_doppler_result_log2(detmatrix_t detmatrix, int rbin){
 // Should be in Q11 assuming the manual isn't lying
 static inline void sum_doppler_result(detmatrix_t detmatrix, int rbin){
     uint16_t *hwaout = (uint16_t*)(hwa_getaddr(gHwaHandle[0]) + 0x4000);
+    memset(detmatrix, 0, sizeof(detmatrix_t));
     for(int db = 0; db < NUM_DOPPLER_CHIRPS; ++db){
         for(int tx = 0; tx < NUM_TX_ANTENNAS; ++tx){
             for(int rx = 0; rx < NUM_RX_ANTENNAS; ++rx){
