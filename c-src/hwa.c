@@ -21,7 +21,7 @@
 #define CFAR_CIRCSHIFT (NUM_DOPPLER_CHIRPS - CFAR_NUM_NOISE_LEFT * 2 + CFAR_NUM_GUARD_CELLS)
 
 // Div factor is 2^CFAR_AVG_DIV_FACTOR
-#define CFAR_AVG_DIV_FACTOR     3
+#define CFAR_AVG_DIV_FACTOR     4
 
 #define CFAR_AVG_MODE           (HWA_NOISE_AVG_MODE_CFAR_CA)
 
@@ -38,7 +38,7 @@
 #define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_ENABLE)
 
-#define CFAR_THRESHOLD (200)
+#define CFAR_THRESHOLD (500)
 
 
 
@@ -224,7 +224,7 @@ static HWA_ParamConfig cfarCfg = {
         .srcAcircShift = CFAR_CIRCSHIFT,
         .srcAcircShiftWrap = 5,
         .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
-        .srcRealComplex = HWA_SAMPLES_FORMAT_REAL,
+        .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
         .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
         .srcSign = HWA_SAMPLES_UNSIGNED,
         .srcConjugate = HWA_FEATURE_BIT_DISABLE,
@@ -448,7 +448,12 @@ void hwa_cfar_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR cb){
     DSSHWACCRegs *pregs = (DSSHWACCRegs*)gHwaObjectPtr[0]->hwAttrs->ctrlBaseAddr;
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &cfarCfg, NULL);
-    pregs->CFAR_THRESH = CFAR_THRESHOLD;
+  //  pregs->CFAR_THRESH = CFAR_THRESHOLD;
+    int ret = HWA_configCFARThresholdScale(CFAR_THRESHOLD);
+
+    if(ret != 0){
+        DebugP_log("Failed to set CFAR threshold got %d\r\n", ret);
+    }
 
 
     HWA_InterruptConfig intrcfg;
