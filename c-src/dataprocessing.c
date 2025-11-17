@@ -80,7 +80,7 @@ void dp_run_doppler(radarcube_t data, detmatrix_t out){
 
     hwa_doppler_init(gHwaHandle[0], &hwa_cb);
 
-    memset(detmatrix, 0, sizeof(detmatrix_t));
+    memset(out, 0, sizeof(detmatrix_t));
 
     for(int i = 0; i < NUM_RANGEBINS; ++i){
         // TODO: replace all of this with EDMA
