@@ -69,12 +69,6 @@
 
 extern void uart_dump_samples(void *buff, size_t n);
 
-struct cfarcfg{
-    uint8_t num_noise;
-    uint8_t divfactor;
-    uint32_t threshold;
-};
-
 
 /* Task related macros */
 #define EXEC_TASK_PRI   (configMAX_PRIORITIES-1)     // must be higher than INIT_TASK_PRI
@@ -149,7 +143,6 @@ uint16_t detmatrix[NUM_RANGEBINS][NUM_DOPPLER_CHIRPS];
 uint16_t angledets[NUM_RANGEBINS][NUM_TX_ANTENNAS * NUM_RX_ANTENNAS];
 
 
-
 static inline void fail(void){
     DebugP_log("Failed\r\n");
     DebugP_assertNoLog(0);
@@ -182,7 +175,7 @@ static void frame_done(Edma_IntrHandle handle, void *args){
     HWA_enable(gHwaHandle[0], 0);
     edma_reset_hwal3_param();
     SemaphoreP_post(&gFrameDoneSem);
-    printf("Frame done\r\n");
+    //printf("Frame done\r\n");
 
 }
 
@@ -205,12 +198,14 @@ static void exec_task(void *args){
     }
 }
 
+
 static void cli_task(void *args){
     while(1){
      cli_main();
      TaskP_yield();
     }
 }
+
 
 static inline void send_radarcube(){
     uint8_t header[] = {1,2,3,4};
@@ -228,14 +223,17 @@ void sensor_start(void){
     gState = 1;
 }
 
+
 void sensor_stop(void){
     gState = 0;
 }
+
 
 void single_shot(void){
     gSingleShot = 1;
     gState = 1;
 }
+
 
 static void main_task(void *args){
     int32_t err = 0;
@@ -265,26 +263,30 @@ while(1){
 
         MMWave_stop(gMmwHandle, &err);
 
-        send_radarcube();
+    //    send_radarcube();
         ClockP_usleep(5000);
 
         if(gSingleShot){
             gState = 0;
+            gSingleShot = 0;
         }
-        continue;
+     //   continue;
 
         dp_run_doppler(gSampleBuff, detmatrix);
 
         int peaks = dp_run_cfar(detmatrix);
-        printf("Detected peaks %d\r\n", peaks);
+       // printf("Detected peaks %d\r\n", peaks);
 
         struct detected_point *points = malloc(peaks * sizeof(struct detected_point));
         construct_detlist(peaks, points);
-
-        for(int i = 0; i < peaks; ++i){
-            printf("R: %hu\r\n", points[i].range);
+        if(peaks != 0){
+            for(int i = 0; i < peaks; ++i){
+                printf("R: %hu D: %hu\r\n", points[i].range,points[i].doppler);
+            }
         }
 
+        free(points);
+        continue;
         int16imre_t *angles = malloc(peaks * NUM_RX_ANTENNAS * NUM_TX_ANTENNAS * sizeof(int16imre_t));
 
         dp_run_anglefft(gSampleBuff, points, peaks, angles);
@@ -356,11 +358,12 @@ static void init_task(void *args){
     // assume for now that input memory will be at HWA base
     uint32_t hwaaddr = (uint32_t)SOC_virtToPhy((void*)hwa_getaddr(gHwaHandle[0]));
     hwa_init(gHwaHandle[0], &hwa_callback);
+    HWA_initConfig(gHwaHandle[0]);
     DebugP_log("HWA address is %#x\r\n",hwaaddr);
     DebugP_log("Done.\r\n");
 
     DebugP_log("Init network...\r\n");
-    network_init(NULL);
+    //network_init(NULL);
     DebugP_log("Done.\r\n");
 
 
