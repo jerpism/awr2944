@@ -38,7 +38,7 @@
 #define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_ENABLE)
 
-#define CFAR_THRESHOLD (500)
+#define CFAR_THRESHOLD (600)
 
 
 
@@ -224,7 +224,7 @@ static HWA_ParamConfig cfarCfg = {
         .srcAcircShift = CFAR_CIRCSHIFT,
         .srcAcircShiftWrap = 5,
         .srcCircShiftWrap3 = HWA_FEATURE_BIT_DISABLE,
-        .srcRealComplex = HWA_SAMPLES_FORMAT_REAL,
+        .srcRealComplex = HWA_SAMPLES_FORMAT_COMPLEX,
         .srcWidth = HWA_SAMPLES_WIDTH_16BIT,
         .srcSign = HWA_SAMPLES_UNSIGNED,
         .srcConjugate = HWA_FEATURE_BIT_DISABLE,
