@@ -15,11 +15,6 @@
 static SemaphoreP_Object hwaDoneSem;
 extern HWA_Handle gHwaHandle[1];
 
-struct detected_point{
-    uint16_t range;
-    uint16_t doppler;
-};
-
 static void hwa_cb(uint32_t intrIdx, uint32_t paramSet, void *arg){
     SemaphoreP_post(&hwaDoneSem);
 }
