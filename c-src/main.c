@@ -65,9 +65,13 @@
 #include <hwa.h>
 #include <network.h>
 #include <dataprocessing.h>
+#include <cli.h>
 #include <types.h>
 
 extern void uart_dump_samples(void *buff, size_t n);
+extern void uart_graphic(struct detected_point *list, size_t n);
+
+
 
 
 /* Task related macros */
@@ -101,6 +105,7 @@ HWA_Handle gHwaHandle[1];
 
 #define GET_SAMPLE_IDX(chirp, rx, rbin ) ( (chirp * (NUM_RX_ANTENNAS) * NUM_RANGEBINS) + (rx * NUM_RANGEBINS) + (rbin) )
 #define SQUARE_I16(x) (((int32_t)x) * ((int32_t)x))
+
 
 
 /* == Function Declarations == */
@@ -275,9 +280,10 @@ while(1){
         struct detected_point *points = malloc(peaks * sizeof(struct detected_point));
         construct_detlist(peaks, points);
         if(peaks != 0){
-            for(int i = 0; i < peaks; ++i){
-                printf("R: %hu D: %hu\r\n", points[i].range,points[i].doppler);
-            }
+            uart_graphic(points, peaks);
+        /*    for(int i = 0; i < peaks; ++i){
+                printf("%hu,%hu\r\n", points[i].range, points[i].doppler);
+            }*/
         }
 
         free(points);
