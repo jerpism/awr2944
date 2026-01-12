@@ -94,7 +94,7 @@ static HWA_ParamConfig rangeCfg = {
             .fftMode =
                 {
                     .fftEn = HWA_FEATURE_BIT_ENABLE,
-                    .fftSize = 8, // size is 2^fftSize
+                    .fftSize = 11, // size is 2^fftSize
                     .butterflyScaling = 0,
                     .fftSize3xEn = HWA_FEATURE_BIT_DISABLE,
                     .windowEn = HWA_FEATURE_BIT_DISABLE,
