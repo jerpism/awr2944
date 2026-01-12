@@ -430,6 +430,27 @@ void hwa_cfg_cfar(HWA_Handle handle, struct cfar_cfg cfg){
 
 
 void hwa_init(HWA_Handle handle,  HWA_ParamDone_IntHandlerFuncPTR cb){
+    // Compiler is smart and figures this out 
+    // Assumes that CFG_PROFILE_NUMADCSAMPLES is a power of 2
+    // and that we're not using 3x fft
+    unsigned int fftsize = CFG_PROFILE_NUMADCSAMPLES;
+    if(fftsize <= 0){
+        DebugP_logError("FFT Size is %u\r\n", fftsize);
+        return;
+    }
+
+    if( (fftsize & (fftsize - 1)) != 0){
+        DebugP_logError("FFT Size is %u which is not a power of 2\r\n", fftsize); 
+        return;
+    }
+
+    unsigned int exponent = 0;
+    while(fftsize > 1){
+        fftsize /= 2;
+        ++exponent;
+    }
+    rangeCfg.accelModeArgs.fftMode.fftSize = exponent;
+
     HWA_configCommon(handle, &HwaCommonConfig[0]);
     HWA_configParamSet(handle, 0, &rangeCfg, NULL);
 
