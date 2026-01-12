@@ -32,7 +32,31 @@ static EDMACCPaRAMEntry edmaparams[4];
 static uint32_t params[4];
 
 
+void edma_nf_configure_hwal3(EDMA_Handle handle, void *cb, void *rdst, void *adst, void *src, uint16_t racnt, uint16_t aacnt, uint16_t rbcnt, uint16_t abcnt, uint16_t ccnt){
+    uint32_t base = 0;
+    uint32_t region = 0;
+    uint32_t tcc = 0;
+    int32_t ret = 0;
+    uint32_t param;
+    uint32_t ch = 0;
 
+    base = EDMA_getBaseAddr(handle);
+    gbaseaddr = base;
+    region = EDMA_getRegionId(handle);
+
+    tcc = EDMA_RESOURCE_ALLOC_ANY;
+    ret = EDMA_allocTcc(handle, &tcc);
+
+    ch = 3;
+    ret = EDMA_allocDmaChannel(handle, &ch);
+}
+
+
+// For now this is just the same thing as with the old frame but different counts
+// but this could change so keep it as a separate thing
+void edma_nf_configure_adchwa(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t acnt, uint16_t bcnt, uint16_t ccnt){
+    edma_configure(handle, cb, dst, src, acnt, bcnt, ccnt);
+}
 
 
 // This is terrible but for some reason the bcnt and dstbidx aren't being reloaded properly
@@ -41,9 +65,15 @@ static uint32_t params[4];
 // Forcefully reloading a param set seems to reset those internal counters as intended but
 // this is a slow, inelegant solution that will probably be the cause of some unforeseen consequences
 void edma_reset_hwal3_param(){
+    #if (CFG_USE_NF_FMT)
+    for(int i = 0; i < 2; ++i){
+        EDMA_setPaRAM(gbaseaddr, params[i], &edmaparams[i]);
+    }
+    #else
     for(int i = 0; i < 4; ++i){
         EDMA_setPaRAM(gbaseaddr, params[i], &edmaparams[i]);
     }
+    #endif
 }
 
 // The HWA to L3 EDMA path will write data to L3 in accordance with TI's radar cube DATA_FORMAT_1
@@ -200,7 +230,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
      * This is achieved by transferring a value to DMA2HWA_TRIGGER from a read-only register
      * that contains a bit corresponding to the DMA channel we are using as a trigger source 
      * which in this case is likely always going to be the 0th channel. */
-    ch1 = 2;
+ /*   ch1 = 2;
     ret = EDMA_allocDmaChannel(handle, &ch1);
     DebugP_assert(ret == 0);
 
@@ -230,7 +260,7 @@ void edma_configure(EDMA_Handle handle, void *cb, void *dst, void *src, uint16_t
     // TODO: figure out what exactly are the required options here 
     // seems to get stuck in something without the interrupts enabled
     edmaparam1.opt |= (EDMA_OPT_TCINTEN_MASK | EDMA_OPT_ITCINTEN_MASK | ((((uint32_t)tcc1)<< EDMA_OPT_TCC_SHIFT)& EDMA_OPT_TCC_MASK));
-    EDMA_setPaRAM(base, param1, &edmaparam1);
+    EDMA_setPaRAM(base, param1, &edmaparam1);*/
 
 
     gIntrObjAdcHwa.tccNum = tcc;

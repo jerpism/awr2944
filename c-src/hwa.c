@@ -38,7 +38,7 @@
 #define CFAR_PEAK_GROUP_EN  (HWA_FEATURE_BIT_DISABLE)
 #define CFAR_CYCLIC_MODE_EN (HWA_FEATURE_BIT_ENABLE)
 
-#define CFAR_THRESHOLD (600)
+#define CFAR_THRESHOLD (500)
 
 
 
@@ -190,6 +190,7 @@ static HWA_ParamConfig dopplerCfg = {
         },
 };
 
+
 static HWA_ParamConfig cfarCfg = {
     .triggerMode = HWA_TRIG_MODE_SOFTWARE,
     .triggerSrc = 0,
@@ -216,7 +217,7 @@ static HWA_ParamConfig cfarCfg = {
         // Data being fed in is log2 magnitude as uint16
         .srcAcnt = CFAR_SRCACNT,
         .srcAIdx = sizeof(uint16_t),
-        .srcBcnt = NUM_RANGEBINS -1,
+        .srcBcnt = NUM_RANGEBINS-1,
         .srcBIdx = NUM_DOPPLER_CHIRPS * sizeof(uint16_t),
         // These don't seem to get applied during CFAR
         .srcCcnt = 1,
@@ -389,6 +390,64 @@ uint32_t hwa_getaddr(HWA_Handle handle){
     HWA_getHWAMemInfo(handle, &meminfo);
 
     return meminfo.baseAddress;
+}
+
+
+void hwa_nf_init(HWA_Handle handle, HWA_ParamDone_IntHandlerFuncPTR rcb, HWA_ParamDone_IntHandlerFuncPTR acb){
+    HWA_ParamConfig nf_rangecfg;
+    // This could be a bit confusing but this is for the 1D (range) FFT for the angle chirps
+    // NOT the angle FFT config 
+    HWA_ParamConfig nf_anglecfg;
+
+    HWA_CommonConfig commoncfg;
+
+    HWA_InterruptConfig rangeintr;
+    HWA_InterruptConfig angleintr;
+
+    memset(&rangeintr, 0, sizeof(rangeintr));
+    memset(&angleintr, 0, sizeof(angleintr));
+
+    rangeintr.cpu.callbackFn = rcb;
+    angleintr.cpu.callbackFn = acb;
+
+    memset(&nf_rangecfg, 0, sizeof(nf_rangecfg));
+    memset(&nf_anglecfg, 0, sizeof(nf_anglecfg));
+    memset(&commoncfg, 0, sizeof(commoncfg));
+
+    // Might be a better way to do this with swapping the commoncfg around 
+    // but seeing as we're only doing 192 chirps total, this easily fits our needs
+    commoncfg.paramStartIdx = 0;
+    commoncfg.paramStopIdx = (NUM_NF_RD_CHIRPS + (NUM_RX_ANTENNAS * NUM_NF_ANGLECHIRPS)) - 1;
+
+    // I'm lazy so just reuse our old frame configuration with some parameter changes
+    memcpy(&nf_rangecfg, &rangeCfg, sizeof(nf_rangecfg));
+
+    // Pretty much everything except source/dest and fftsize *should* be the same
+    nf_rangecfg.accelModeArgs.fftMode.fftSize = 9;
+    // We only care about 1 Rx for range/doppler
+    nf_rangecfg.source.srcAcnt = CFG_NF_NUMADCSAMPLES - 1;
+    nf_rangecfg.source.srcBcnt = 1 - 1;
+    nf_rangecfg.dest.dstAcnt = (CFG_NF_NUMADCSAMPLES / 2) - 1;
+
+    // Angle only really changes our bcnt
+    memcpy(&nf_anglecfg, &nf_rangecfg, sizeof(nf_anglecfg));
+    nf_anglecfg.source.srcBcnt = NUM_RX_ANTENNAS - 1;
+
+    HWA_configCommon(handle, &commoncfg);
+
+
+    for(int i = 0; i < NUM_NF_RD_CHIRPS; ++i){
+        HWA_configParamSet(handle, i, &nf_rangecfg, NULL);
+        HWA_enableParamSetInterrupt(handle, i, &rangeintr);
+    }
+
+    for(int i = 0; i < NUM_NF_ANGLECHIRPS * NUM_RX_ANTENNAS; ++i){
+        HWA_configParamSet(handle, NUM_NF_RD_CHIRPS + i, &nf_anglecfg, NULL);
+        HWA_enableParamSetInterrupt(handle, NUM_NF_RD_CHIRPS + i, &angleintr);
+    }
+
+    DebugP_log("HWA init done\r\n");
+
 }
 
 

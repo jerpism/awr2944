@@ -117,35 +117,61 @@ MMWave_ProfileHandle mmw_create_profile(MMWave_Handle handle, rlUInt16_t id, int
     profileCfg.adcStartTimeConst = CFG_PROFILE_ADCSTARTTIMECONST;     
     profileCfg.rampEndTime = CFG_PROFILE_RAMPENDTIME;	    
     profileCfg.txStartTime = 0;
+
+    // Might use 512 bit sampling for the old frame as well but have these be separate for now
+    #if (CFG_USE_NF_FMT)
+    profileCfg.numAdcSamples = CFG_NF_NUMADCSAMPLES;
+    #else
     profileCfg.numAdcSamples = CFG_PROFILE_NUMADCSAMPLES;
+    #endif
+
     profileCfg.digOutSampleRate = CFG_PROFILE_DIGOUTSAMPLERATE;
     profileCfg.rxGain = CFG_PROFILE_RXGAIN;
     profileCfg.freqSlopeConst = CFG_PROFILE_FREQSLOPECONST;
 
 
-    // TODO: remove this idiocy
-    if(id == 1){
-        // Set Tx1 phaseshifter to 180 deg for profile[1]
-        profileCfg.txPhaseShifter |= (32U << 10);
-    }
-
     return MMWave_addProfile(handle, &profileCfg, err);
 }
 
 
-MMWave_ChirpHandle mmw_add_chirp(MMWave_ProfileHandle profile, int32_t *err){
+int32_t mmw_nf_add_chirps(MMWave_ProfileHandle profile, rlUInt16_t profileid, int32_t *err){
     rlChirpCfg_t chirpCfg;
     memset(&chirpCfg, 0, sizeof(chirpCfg));
-    chirpCfg.chirpEndIdx = 0;
-    chirpCfg.chirpStartIdx = 0;
-    chirpCfg.profileId = 0;
+
+    chirpCfg.profileId = profileid;
     chirpCfg.startFreqVar = 0;
     chirpCfg.freqSlopeVar = 0;
     chirpCfg.idleTimeVar = 0;
     chirpCfg.adcStartTimeVar = 0;
-    chirpCfg.txEnable |= 0b0011;
 
-    return MMWave_addChirp(profile, &chirpCfg, err);
+    // max chirps in a profile is 512 
+    DebugP_assert(NUM_NF_RD_CHIRPS + 4 * NUM_NF_ANGLECHIRPS <= 512);
+
+    // Range/Doppler chirps
+    chirpCfg.chirpStartIdx = 0;
+    chirpCfg.chirpEndIdx = NUM_NF_RD_CHIRPS - 1;
+    chirpCfg.txEnable = 0b0001;
+
+    // Angle chirps TX 1
+    chirpCfg.chirpStartIdx = NUM_NF_RD_CHIRPS;
+    chirpCfg.chirpEndIdx = NUM_NF_RD_CHIRPS + 1 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.txEnable = 0b0001;
+
+    // Angle chirps for TX2
+    chirpCfg.chirpStartIdx = NUM_NF_RD_CHIRPS + 1 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.chirpEndIdx = NUM_NF_RD_CHIRPS + 2 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.txEnable = 0b0010;
+
+    // Angle chirps for TX3
+    chirpCfg.chirpStartIdx = NUM_NF_RD_CHIRPS + 2 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.chirpEndIdx = NUM_NF_RD_CHIRPS + 3 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.txEnable = 0b0100;
+
+    // Angle chirps for TX4
+    chirpCfg.chirpStartIdx = NUM_NF_RD_CHIRPS + 3 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.chirpEndIdx = NUM_NF_RD_CHIRPS + 4 * NUM_NF_ANGLECHIRPS - 1;
+    chirpCfg.txEnable = 0b1000;
+
 }
 
 
