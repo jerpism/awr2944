@@ -7,7 +7,9 @@
 #define CFG_PROFILE_ADCSTARTTIMECONST 700U
 #define CFG_PROFILE_RAMPENDTIME 2081U
 #define CFG_PROFILE_FREQSLOPECONST 932U
-#define CFG_PROFILE_NUMADCSAMPLES 256U
+// This is also the HWA FFT acnt so make sure it's a power of 2 for now
+// FFT size is CFG_PROFILE_NUMADCSAMPLES / 2 since the input is real data
+#define CFG_PROFILE_NUMADCSAMPLES 2048U
 #define CFG_PROFILE_DIGOUTSAMPLERATE 30000U
 #define CFG_PROFILE_RXGAIN 164U
 #define CFG_OPEN_CHCONF_RXEN_BMASK 0b1111
@@ -20,7 +22,7 @@
 // TODO: get this from a txen bitmask too
 #define NUM_TX_ANTENNAS 4
 
-#define CHIRPS_PER_FRAME    128
+#define CHIRPS_PER_FRAME    64
 
 // Doppler chirps will always be the total chirps in a frame / enabled rx
 #define NUM_DOPPLER_CHIRPS (CHIRPS_PER_FRAME / NUM_RX_ANTENNAS)
